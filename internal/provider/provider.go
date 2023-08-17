@@ -71,7 +71,7 @@ func (p *sendgridProvider) Configure(ctx context.Context, req provider.Configure
 		apiKey = config.APIKey.ValueString()
 	}
 
-	if !config.APIKey.IsNull() {
+	if !config.Subuser.IsNull() {
 		subuser = config.Subuser.ValueString()
 	}
 
