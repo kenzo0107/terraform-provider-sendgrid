@@ -27,6 +27,7 @@ func TestAccTeammateResource(t *testing.T) {
 					resource.TestCheckResourceAttrSet(resourceName, "id"),
 					resource.TestCheckResourceAttr(resourceName, "email", email),
 					resource.TestCheckResourceAttr(resourceName, "is_admin", "false"),
+					resource.TestCheckTypeSetElemAttr(resourceName, "scopes.*", "user.profile.read"),
 				),
 			},
 			// ImportState testing
@@ -42,6 +43,7 @@ func TestAccTeammateResource(t *testing.T) {
 					resource.TestCheckResourceAttrSet(resourceName, "id"),
 					resource.TestCheckResourceAttr(resourceName, "email", email),
 					resource.TestCheckResourceAttr(resourceName, "is_admin", "true"),
+					resource.TestCheckTypeSetElemAttr(resourceName, "scopes.*", "user.profile.read"),
 				),
 			},
 		},
@@ -53,6 +55,7 @@ func testAccTeammateResourceConfig(email string, is_admin bool) string {
 resource "sendgrid_teammate" "test" {
 	email = "%s"
 	is_admin = %t
+	scopes = ["user.profile.read"]
 }
 `, email, is_admin)
 }

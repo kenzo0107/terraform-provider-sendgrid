@@ -38,6 +38,7 @@ func testAccTeammateDataSourceConfig(email string) string {
 	return fmt.Sprintf(`
 resource "sendgrid_teammate" "test" {
 	email = "%[1]s"
+	scopes = ["user.profile.read"]
 }
 
 data "sendgrid_teammate" "test" {
