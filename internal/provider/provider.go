@@ -120,12 +120,14 @@ func (p *sendgridProvider) Configure(ctx context.Context, req provider.Configure
 func (p *sendgridProvider) Resources(ctx context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
 		newTeammateResource,
+		newAPIKeyResource,
 	}
 }
 
 func (p *sendgridProvider) DataSources(ctx context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{
 		newTeammateDataSource,
+		newAPIKeyDataSource,
 	}
 }
 
