@@ -21,6 +21,13 @@ For more detailed information, please see the [SendGrid documentation](https://d
 ```terraform
 resource "sendgrid_teammate" "example" {
   email = "dummy@example.com"
+  scopes = [
+    "user.profile.read",
+  ]
+
+  lifecycle {
+    ignore_changes = [scopes]
+  }
 }
 ```
 
@@ -30,11 +37,19 @@ resource "sendgrid_teammate" "example" {
 ### Required
 
 - `email` (String) Teammate's email
+- `scopes` (Set of String) The permissions API Key has access to.
+
+For more detailed information, please see the [SendGrid documentation](https://docs.sendgrid.com/ui/account-and-settings/teammate-permissions#persona-scopes)
+
+Note:
+Since scopes are automatically added after registering the usernames of invited teammates, there's a possibility that they might differ from the values defined in the Terraform code.
+As some scopes that cannot be defined are unclear, the current approach is to use ignore_changes to avoid modifications and instead set permissions on the dashboard, which is preferable.
 
 ### Optional
 
-- `is_admin` (Boolean) Set to true if teammate has admin privileges
+- `is_admin` (Boolean) Set to true if teammate has admin privileges.
 
 ### Read-Only
 
 - `id` (String) The ID of this resource.
+- `username` (String) Teammate's username
