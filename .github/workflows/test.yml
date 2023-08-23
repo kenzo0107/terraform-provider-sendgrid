@@ -72,5 +72,6 @@ jobs:
       - env:
           TF_ACC: '1'
           SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
+          IP_ADDRESS: ${{ secrets.IP_ADDRESS }}
         run: go test -v -cover ./internal/provider/
         timeout-minutes: 10

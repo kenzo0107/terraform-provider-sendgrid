@@ -121,6 +121,7 @@ func (p *sendgridProvider) Resources(ctx context.Context) []func() resource.Reso
 	return []func() resource.Resource{
 		newTeammateResource,
 		newAPIKeyResource,
+		newSubuserResource,
 	}
 }
 
@@ -128,6 +129,7 @@ func (p *sendgridProvider) DataSources(ctx context.Context) []func() datasource.
 	return []func() datasource.DataSource{
 		newTeammateDataSource,
 		newAPIKeyDataSource,
+		newSubuserDataSource,
 	}
 }
 

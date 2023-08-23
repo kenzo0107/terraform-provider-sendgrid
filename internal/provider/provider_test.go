@@ -25,4 +25,7 @@ func testAccPreCheck(t *testing.T) {
 	if err := os.Getenv("SENDGRID_API_KEY"); err == "" {
 		t.Fatal("SENDGRID_API_KEY must be set for acceptance tests")
 	}
+	if err := os.Getenv("IP_ADDRESS"); err == "" {
+		t.Fatal("IP_ADDRESS must be set for acceptance tests")
+	}
 }
