@@ -7,7 +7,7 @@ require (
 	github.com/hashicorp/terraform-plugin-framework v1.3.4
 	github.com/hashicorp/terraform-plugin-go v0.18.0
 	github.com/hashicorp/terraform-plugin-testing v1.4.0
-	github.com/kenzo0107/sendgrid v0.0.3
+	github.com/kenzo0107/sendgrid v0.0.5
 )
 
 require (
