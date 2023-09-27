@@ -25,22 +25,22 @@ type teammateDataSource struct {
 }
 
 type teammateDataSourceModel struct {
-	ID        types.String `tfsdk:"id"`
-	Username  types.String `tfsdk:"username"`
-	Email     types.String `tfsdk:"email"`
-	FirstName types.String `tfsdk:"first_name"`
-	LastName  types.String `tfsdk:"last_name"`
-	Address   types.String `tfsdk:"address"`
-	Address2  types.String `tfsdk:"address2"`
-	City      types.String `tfsdk:"city"`
-	State     types.String `tfsdk:"state"`
-	Zip       types.String `tfsdk:"zip"`
-	Country   types.String `tfsdk:"country"`
-	Website   types.String `tfsdk:"website"`
-	Phone     types.String `tfsdk:"phone"`
-	IsAdmin   types.Bool   `tfsdk:"is_admin"`
-	UserType  types.String `tfsdk:"user_type"`
-	Scopes    types.Set    `tfsdk:"scopes"`
+	ID        types.String   `tfsdk:"id"`
+	Username  types.String   `tfsdk:"username"`
+	Email     types.String   `tfsdk:"email"`
+	FirstName types.String   `tfsdk:"first_name"`
+	LastName  types.String   `tfsdk:"last_name"`
+	Address   types.String   `tfsdk:"address"`
+	Address2  types.String   `tfsdk:"address2"`
+	City      types.String   `tfsdk:"city"`
+	State     types.String   `tfsdk:"state"`
+	Zip       types.String   `tfsdk:"zip"`
+	Country   types.String   `tfsdk:"country"`
+	Website   types.String   `tfsdk:"website"`
+	Phone     types.String   `tfsdk:"phone"`
+	IsAdmin   types.Bool     `tfsdk:"is_admin"`
+	UserType  types.String   `tfsdk:"user_type"`
+	Scopes    []types.String `tfsdk:"scopes"`
 }
 
 func (d *teammateDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -163,7 +163,11 @@ func (d *teammateDataSource) Read(ctx context.Context, req datasource.ReadReques
 
 	// If the teammate is in a pending state, return their data.
 	if pendingUser != nil {
-		scopes, _ := types.SetValueFrom(ctx, types.StringType, pendingUser.Scopes)
+		scopes := []types.String{}
+		for _, s := range pendingUser.Scopes {
+			scopes = append(scopes, types.StringValue(s))
+		}
+
 		p := teammateDataSourceModel{
 			ID:      types.StringValue(pendingUser.Email),
 			Email:   types.StringValue(pendingUser.Email),
@@ -200,7 +204,10 @@ func (d *teammateDataSource) Read(ctx context.Context, req datasource.ReadReques
 		return
 	}
 
-	scopes, _ := types.SetValueFrom(ctx, types.StringType, user.Scopes)
+	scopes := []types.String{}
+	for _, s := range user.Scopes {
+		scopes = append(scopes, types.StringValue(s))
+	}
 
 	u := teammateDataSourceModel{
 		ID:        types.StringValue(user.Email),

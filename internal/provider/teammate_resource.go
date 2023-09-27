@@ -13,7 +13,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/kenzo0107/sendgrid"
-	"github.com/kenzo0107/terraform-provider-sendgrid/flex"
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
@@ -29,11 +28,11 @@ type teammateResource struct {
 }
 
 type teammateResourceModel struct {
-	ID       types.String `tfsdk:"id"`
-	Email    types.String `tfsdk:"email"`
-	IsAdmin  types.Bool   `tfsdk:"is_admin"`
-	Scopes   types.Set    `tfsdk:"scopes"`
-	Username types.String `tfsdk:"username"`
+	ID       types.String   `tfsdk:"id"`
+	Email    types.String   `tfsdk:"email"`
+	IsAdmin  types.Bool     `tfsdk:"is_admin"`
+	Scopes   []types.String `tfsdk:"scopes"`
+	Username types.String   `tfsdk:"username"`
 }
 
 func (r *teammateResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -110,21 +109,20 @@ func (r *teammateResource) Create(ctx context.Context, req resource.CreateReques
 		return
 	}
 
-	// NOTE: There are cases where SendGrid automatically adds scopes,
-	// 		 and they may not match the values specified in the terraform,
-	//       so we do not manage them.
-	// 		 We will assign appropriate values to the scopes.
-
-	scopes := flex.ExpandFrameworkStringSet(ctx, data.Scopes)
-	if data.IsAdmin.ValueBool() {
-		scopes = nil
-	}
-
-	inviteTeammate, err := r.client.InviteTeammate(context.TODO(), &sendgrid.InputInviteTeammate{
+	input := &sendgrid.InputInviteTeammate{
 		Email:   data.Email.ValueString(),
 		IsAdmin: data.IsAdmin.ValueBool(),
-		Scopes:  scopes,
-	})
+	}
+
+	if !data.IsAdmin.ValueBool() {
+		var scopes []string
+		for _, s := range data.Scopes {
+			scopes = append(scopes, s.ValueString())
+		}
+		input.Scopes = scopes
+	}
+
+	inviteTeammate, err := r.client.InviteTeammate(context.TODO(), input)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Creating teammate",
@@ -133,10 +131,9 @@ func (r *teammateResource) Create(ctx context.Context, req resource.CreateReques
 		return
 	}
 
-	scopesSet, d := types.SetValueFrom(ctx, types.StringType, inviteTeammate.Scopes)
-	resp.Diagnostics.Append(d...)
-	if resp.Diagnostics.HasError() {
-		return
+	scopes := []types.String{}
+	for _, s := range inviteTeammate.Scopes {
+		scopes = append(scopes, types.StringValue(s))
 	}
 
 	// pending user does not have an username.
@@ -144,8 +141,9 @@ func (r *teammateResource) Create(ctx context.Context, req resource.CreateReques
 		ID:      types.StringValue(inviteTeammate.Email),
 		Email:   types.StringValue(inviteTeammate.Email),
 		IsAdmin: types.BoolValue(inviteTeammate.IsAdmin),
-		Scopes:  scopesSet,
+		Scopes:  scopes,
 	}
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -172,9 +170,10 @@ func (r *teammateResource) Read(ctx context.Context, req resource.ReadRequest, r
 
 	// If the teammate is in a pending state, return their data.
 	if pendingTeammate != nil {
-		pendingTeammateScopes, d := types.SetValueFrom(ctx, types.StringType, pendingTeammate.Scopes)
-		resp.Diagnostics.Append(d...)
-
+		scopes := []types.String{}
+		for _, s := range pendingTeammate.Scopes {
+			scopes = append(scopes, types.StringValue(s))
+		}
 		data = teammateResourceModel{
 			ID:    types.StringValue(pendingTeammate.Email),
 			Email: types.StringValue(pendingTeammate.Email),
@@ -186,8 +185,9 @@ func (r *teammateResource) Read(ctx context.Context, req resource.ReadRequest, r
 			//       While there might be differences from the actual code,
 			//       not accommodating the above would hinder team member management, making it unavoidable.
 			IsAdmin: data.IsAdmin,
-			Scopes:  pendingTeammateScopes,
+			Scopes:  scopes,
 		}
+
 		resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 		return
 	}
@@ -217,19 +217,19 @@ func (r *teammateResource) Read(ctx context.Context, req resource.ReadRequest, r
 		return
 	}
 
-	scopes, d := types.SetValueFrom(ctx, types.StringType, o.Scopes)
-	resp.Diagnostics.Append(d...)
-	if resp.Diagnostics.HasError() {
-		return
+	scopes := []types.String{}
+	for _, s := range o.Scopes {
+		scopes = append(scopes, types.StringValue(s))
 	}
 
 	data = teammateResourceModel{
 		ID:       types.StringValue(o.Email),
 		Email:    types.StringValue(o.Email),
 		IsAdmin:  types.BoolValue(o.IsAdmin),
-		Scopes:   scopes,
 		Username: types.StringValue(o.Username),
+		Scopes:   scopes,
 	}
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -257,9 +257,6 @@ func (r *teammateResource) Update(ctx context.Context, req resource.UpdateReques
 
 	// If the teammate is in a pending state, it is not possible to update the permissions.
 	if pendingTeammate != nil {
-		dataScopes, d := types.SetValueFrom(ctx, types.StringType, data.Scopes)
-		resp.Diagnostics.Append(d...)
-
 		p := teammateResourceModel{
 			ID:    types.StringValue(pendingTeammate.Email),
 			Email: types.StringValue(pendingTeammate.Email),
@@ -271,7 +268,7 @@ func (r *teammateResource) Update(ctx context.Context, req resource.UpdateReques
 			//       While there might be differences from the actual code,
 			//       not accommodating the above would hinder team member management, making it unavoidable.
 			IsAdmin: data.IsAdmin,
-			Scopes:  dataScopes,
+			Scopes:  data.Scopes,
 		}
 		resp.Diagnostics.Append(resp.State.Set(ctx, &p)...)
 		return
@@ -280,9 +277,9 @@ func (r *teammateResource) Update(ctx context.Context, req resource.UpdateReques
 	// get username from tfstate
 	username := state.Username.ValueString()
 
-	scopes := flex.ExpandFrameworkStringSet(ctx, data.Scopes)
-	if data.IsAdmin.ValueBool() {
-		scopes = nil
+	scopes := []string{}
+	for _, s := range data.Scopes {
+		scopes = append(scopes, s.ValueString())
 	}
 
 	o, err := r.client.UpdateTeammatePermissions(ctx, username, &sendgrid.InputUpdateTeammatePermissions{
@@ -297,10 +294,9 @@ func (r *teammateResource) Update(ctx context.Context, req resource.UpdateReques
 		return
 	}
 
-	scopesSet, d := types.SetValueFrom(ctx, types.StringType, o.Scopes)
-	resp.Diagnostics.Append(d...)
-	if resp.Diagnostics.HasError() {
-		return
+	scopesSet := []types.String{}
+	for _, s := range o.Scopes {
+		scopesSet = append(scopesSet, types.StringValue(s))
 	}
 
 	// Save updated data into Terraform state
@@ -308,9 +304,10 @@ func (r *teammateResource) Update(ctx context.Context, req resource.UpdateReques
 		ID:       types.StringValue(o.Email),
 		Email:    types.StringValue(o.Email),
 		IsAdmin:  types.BoolValue(o.IsAdmin),
-		Scopes:   scopesSet,
 		Username: types.StringValue(o.Username),
+		Scopes:   scopesSet,
 	}
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -395,15 +392,17 @@ func (r *teammateResource) ImportState(ctx context.Context, req resource.ImportS
 
 	// If the teammate is in a pending state, return their data.
 	if pendingTeammate != nil {
-		scopes, d := types.SetValueFrom(ctx, types.StringType, pendingTeammate.Scopes)
-		resp.Diagnostics.Append(d...)
-
+		var scopes []types.String
+		for _, s := range pendingTeammate.Scopes {
+			scopes = append(scopes, types.StringValue(s))
+		}
 		data = teammateResourceModel{
 			ID:      types.StringValue(email),
 			Email:   types.StringValue(email),
 			IsAdmin: types.BoolValue(pendingTeammate.IsAdmin),
 			Scopes:  scopes,
 		}
+
 		resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 		return
 	}
@@ -434,10 +433,9 @@ func (r *teammateResource) ImportState(ctx context.Context, req resource.ImportS
 		return
 	}
 
-	scopes, d := types.SetValueFrom(ctx, types.StringType, teammate.Scopes)
-	resp.Diagnostics.Append(d...)
-	if resp.Diagnostics.HasError() {
-		return
+	var scopesSet []types.String
+	for _, s := range teammate.Scopes {
+		scopesSet = append(scopesSet, types.StringValue(s))
 	}
 
 	data = teammateResourceModel{
@@ -445,8 +443,9 @@ func (r *teammateResource) ImportState(ctx context.Context, req resource.ImportS
 		Email:    types.StringValue(teammate.Email),
 		IsAdmin:  types.BoolValue(teammate.IsAdmin),
 		Username: types.StringValue(teammate.Username),
-		Scopes:   scopes,
+		Scopes:   scopesSet,
 	}
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
