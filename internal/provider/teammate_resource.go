@@ -392,7 +392,7 @@ func (r *teammateResource) ImportState(ctx context.Context, req resource.ImportS
 
 	// If the teammate is in a pending state, return their data.
 	if pendingTeammate != nil {
-		var scopes []types.String
+		scopes := []types.String{}
 		for _, s := range pendingTeammate.Scopes {
 			scopes = append(scopes, types.StringValue(s))
 		}
@@ -433,9 +433,9 @@ func (r *teammateResource) ImportState(ctx context.Context, req resource.ImportS
 		return
 	}
 
-	var scopesSet []types.String
+	scopes := []types.String{}
 	for _, s := range teammate.Scopes {
-		scopesSet = append(scopesSet, types.StringValue(s))
+		scopes = append(scopes, types.StringValue(s))
 	}
 
 	data = teammateResourceModel{
@@ -443,7 +443,7 @@ func (r *teammateResource) ImportState(ctx context.Context, req resource.ImportS
 		Email:    types.StringValue(teammate.Email),
 		IsAdmin:  types.BoolValue(teammate.IsAdmin),
 		Username: types.StringValue(teammate.Username),
-		Scopes:   scopesSet,
+		Scopes:   scopes,
 	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
