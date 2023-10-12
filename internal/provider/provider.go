@@ -123,6 +123,7 @@ func (p *sendgridProvider) Resources(ctx context.Context) []func() resource.Reso
 		newAPIKeyResource,
 		newSubuserResource,
 		newSenderAuthenticationResource,
+		newLinkBrandingResource,
 	}
 }
 
@@ -132,6 +133,7 @@ func (p *sendgridProvider) DataSources(ctx context.Context) []func() datasource.
 		newAPIKeyDataSource,
 		newSubuserDataSource,
 		newSenderAuthenticationDataSource,
+		newLinkBrandingDataSource,
 	}
 }
 
