@@ -60,3 +60,11 @@ Read-Only:
 - `host` (String) The domain that this DNS record was created for.
 - `type` (String) The type of DNS record.
 - `valid` (Boolean) Indicated whether the CName of the DNS is valid or not.
+
+## Import
+
+Import is supported using the following syntax:
+
+```shell
+% terraform import sendgrid_sender_authentication.example <id>
+```
