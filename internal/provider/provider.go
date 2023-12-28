@@ -124,6 +124,7 @@ func (p *sendgridProvider) Resources(ctx context.Context) []func() resource.Reso
 		newSubuserResource,
 		newSenderAuthenticationResource,
 		newLinkBrandingResource,
+		newSenderVerificationResource,
 	}
 }
 
@@ -134,6 +135,7 @@ func (p *sendgridProvider) DataSources(ctx context.Context) []func() datasource.
 		newSubuserDataSource,
 		newSenderAuthenticationDataSource,
 		newLinkBrandingDataSource,
+		newSenderVerificationDataSource,
 	}
 }
 

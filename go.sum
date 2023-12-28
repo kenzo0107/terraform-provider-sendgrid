@@ -118,6 +118,8 @@ github.com/kenzo0107/sendgrid v0.0.8 h1:aMeErYjRJM9wF98C8a1irTMOeNClZUF2BCA10kYI
 github.com/kenzo0107/sendgrid v0.0.8/go.mod h1:QjjiRx0jvq2ldgR7U9pnoW+F3wf/E9pVUed04pReuPU=
 github.com/kenzo0107/sendgrid v0.0.9 h1:1F9TAn9zsSSivkTfAw1Ghp+IN8+0NmcLoJodMyjV3fk=
 github.com/kenzo0107/sendgrid v0.0.9/go.mod h1:QjjiRx0jvq2ldgR7U9pnoW+F3wf/E9pVUed04pReuPU=
+github.com/kenzo0107/sendgrid v0.0.12 h1:MFiauMa3VkOofA1grZ8iqVdj9X/crE+B3Z42U9+8z5E=
+github.com/kenzo0107/sendgrid v0.0.12/go.mod h1:QjjiRx0jvq2ldgR7U9pnoW+F3wf/E9pVUed04pReuPU=
 github.com/kevinburke/ssh_config v1.2.0 h1:x584FjTGwHzMwvHx18PXxbBVzfnxogHaAReU4gf13a4=
 github.com/kr/pretty v0.1.0/go.mod h1:dAy3ld7l9f0ibDNOQOHHMYYIIbhfbHSm3C4ZsoJORNo=
 github.com/kr/pretty v0.3.0 h1:WgNl7dwNpEZ6jJ9k1snq4pZsg7DOEN8hP9Xw0Tsjwk0=
