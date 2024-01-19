@@ -15,14 +15,13 @@ description: |-
 ```terraform
 terraform {
   required_providers {
-    hashicups = {
-      source = "kenzo0107/sendgrid"
+    sendgrid = {
+      source = "registry.terraform.io/kenzo0107/sendgrid"
     }
   }
 }
 
 provider "sendgrid" {
-  api_key = "<your api key>"
 }
 ```
 
