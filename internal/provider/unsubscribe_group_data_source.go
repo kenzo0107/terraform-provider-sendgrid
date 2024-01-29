@@ -60,11 +60,11 @@ func (d *unsubscribeGroupDataSource) Configure(ctx context.Context, req datasour
 func (d *unsubscribeGroupDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		MarkdownDescription: `
-		Provides a subuser resource.
+Provides suppressions unsubscribe group resource.
 
-		Suppression groups, or unsubscribe groups, are specific types or categories of emails from which you would like your recipients to be able to unsubscribe. For example: Daily Newsletters, Invoices, and System Alerts are all potential suppression groups.
+Suppression groups, or unsubscribe groups, are specific types or categories of emails from which you would like your recipients to be able to unsubscribe. For example: Daily Newsletters, Invoices, and System Alerts are all potential suppression groups.
 
-		Visit the main documentation to [learn more about suppression/unsubscribe groups](https://sendgrid.com/docs/ui/sending-email/unsubscribe-groups/).
+Visit the main documentation to [learn more about suppression/unsubscribe groups](https://sendgrid.com/docs/ui/sending-email/unsubscribe-groups/).
 		`,
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{

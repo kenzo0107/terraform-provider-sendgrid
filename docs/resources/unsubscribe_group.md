@@ -3,14 +3,14 @@
 page_title: "sendgrid_unsubscribe_group Resource - terraform-provider-sendgrid"
 subcategory: ""
 description: |-
-  Provides a subuser resource.
+  Provides suppressions unsubscribe group resource.
   Suppression groups, or unsubscribe groups, are specific types or categories of emails from which you would like your recipients to be able to unsubscribe. For example: Daily Newsletters, Invoices, and System Alerts are all potential suppression groups.
   Visit the main documentation to learn more about suppression/unsubscribe groups https://sendgrid.com/docs/ui/sending-email/unsubscribe-groups/.
 ---
 
 # sendgrid_unsubscribe_group (Resource)
 
-Provides a subuser resource.
+Provides suppressions unsubscribe group resource.
 
 Suppression groups, or unsubscribe groups, are specific types or categories of emails from which you would like your recipients to be able to unsubscribe. For example: Daily Newsletters, Invoices, and System Alerts are all potential suppression groups.
 
@@ -40,4 +40,12 @@ resource "sendgrid_unsubscribe_group" "example" {
 
 ### Read-Only
 
-- `id` (String) The user ID of the unsubscribe group.
+- `id` (String) The ID of the unsubscribe group.
+
+## Import
+
+Import is supported using the following syntax:
+
+```shell
+% terraform import sendgrid_unsubscribe_group.example <unsubscribe group id>
+```
