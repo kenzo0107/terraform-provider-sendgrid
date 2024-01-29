@@ -42,7 +42,7 @@ func (r *unsubscribeGroupResource) Metadata(ctx context.Context, req resource.Me
 func (r *unsubscribeGroupResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		MarkdownDescription: `
-Provides a subuser resource.
+Provides suppressions unsubscribe group resource.
 
 Suppression groups, or unsubscribe groups, are specific types or categories of emails from which you would like your recipients to be able to unsubscribe. For example: Daily Newsletters, Invoices, and System Alerts are all potential suppression groups.
 
