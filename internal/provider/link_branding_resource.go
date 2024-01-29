@@ -19,7 +19,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
-	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/kenzo0107/sendgrid"
 )
 
@@ -240,11 +239,6 @@ func (r *linkBrandingResource) Read(ctx context.Context, req resource.ReadReques
 	data.Legacy = types.BoolValue(o.Legacy)
 	data.Valid = types.BoolValue(o.Valid)
 	data.DNS = convertDNSBrandedLinkToSetType(o.DNS)
-
-	tflog.Info(ctx, "(^-^) Read", map[string]interface{}{
-		"o.Default": o.Default,
-		"o.ID":      o.ID,
-	})
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
