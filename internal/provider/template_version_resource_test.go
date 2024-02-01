@@ -42,7 +42,7 @@ func TestAccTemplateVersionVersionResource(t *testing.T) {
 				ResourceName:      resourceName,
 				ImportState:       true,
 				ImportStateVerify: true,
-				ImportStateIdFunc: importStateIdFunc("sendgrid_template_version.test"),
+				ImportStateIdFunc: importStateIdFunc(resourceName),
 			},
 			// Update and Read testing
 			{
