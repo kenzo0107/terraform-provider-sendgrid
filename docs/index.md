@@ -3,7 +3,7 @@
 page_title: "sendgrid Provider"
 subcategory: ""
 description: |-
-
+  
 ---
 
 # sendgrid Provider
@@ -30,5 +30,5 @@ provider "sendgrid" {
 
 ### Optional
 
-- `api_key` (String, Sensitive) Username for Sendgrid API. May also be provided via SENDGRID_API_KEY environment variable.
+- `api_key` (String, Sensitive) API Key for Sendgrid API. May also be provided via SENDGRID_API_KEY environment variable.
 - `subuser` (String) Subuser for Sendgrid API. May also be provided via SENDGRID_SUBUSER environment variable.

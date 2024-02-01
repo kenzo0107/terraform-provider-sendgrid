@@ -42,7 +42,7 @@ func (p *sendgridProvider) Schema(ctx context.Context, req provider.SchemaReques
 	resp.Schema = schema.Schema{
 		Attributes: map[string]schema.Attribute{
 			"api_key": schema.StringAttribute{
-				MarkdownDescription: "Username for Sendgrid API. May also be provided via SENDGRID_SUBUSER environment variable.",
+				MarkdownDescription: "API Key for Sendgrid API. May also be provided via SENDGRID_API_KEY environment variable.",
 				Optional:            true,
 				Sensitive:           true,
 			},
