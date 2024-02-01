@@ -108,6 +108,9 @@ For more information about transactional templates, please see our Transactional
 				Optional:            true,
 				Computed:            true,
 				Default:             stringdefault.StaticString("code"),
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
 				Validators: []validator.String{
 					stringOneOf("code", "design"),
 				},
@@ -242,30 +245,30 @@ func (r *templateVersionResource) Update(ctx context.Context, req resource.Updat
 
 	active, _ := data.Active.ValueBigFloat().Int64()
 	input.Active = int(active)
-	if data.Name.ValueString() != "" {
+	input.GeneratePlainContent = data.GeneratePlainContent.ValueBool()
+	if data.Name.ValueString() != "" && data.Name.ValueString() != state.Name.ValueString() {
 		input.Name = data.Name.ValueString()
 	}
-	if data.Subject.ValueString() != "" {
+	if data.Subject.ValueString() != "" && data.Subject.ValueString() != state.Subject.ValueString() {
 		input.Subject = data.Subject.ValueString()
 	}
-	if data.HTMLContent.ValueString() != "" {
+	if data.HTMLContent.ValueString() != "" && data.HTMLContent.ValueString() != state.HTMLContent.ValueString() {
 		input.HTMLContent = data.HTMLContent.ValueString()
 	}
-	if data.PlainContent.ValueString() != "" {
+	if data.PlainContent.ValueString() != "" && data.PlainContent.ValueString() != state.PlainContent.ValueString() {
 		input.PlainContent = data.PlainContent.ValueString()
 	}
-	if data.GeneratePlainContent.ValueBool() {
-		input.GeneratePlainContent = data.GeneratePlainContent.ValueBool()
-	}
-	if data.Editor.ValueString() != "" {
+	// NOTE: Even if "code" is already set, if you try to update it with "code", an error will occur.
+	if data.Editor.ValueString() != "" && data.Editor.ValueString() != state.Editor.ValueString() {
 		input.Editor = data.Editor.ValueString()
 	}
-	if data.TestData.ValueString() != "" {
+	if data.TestData.ValueString() != "" && data.TestData.ValueString() != state.TestData.ValueString() {
 		input.TestData = data.TestData.ValueString()
 	}
 
 	versionID := state.ID.ValueString()
 	templateID := data.TemplateID.ValueString()
+
 	o, err := r.client.UpdateTemplateVersion(ctx, templateID, versionID, input)
 	if err != nil {
 		resp.Diagnostics.AddError(
