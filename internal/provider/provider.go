@@ -128,6 +128,7 @@ func (p *sendgridProvider) Resources(ctx context.Context) []func() resource.Reso
 		newUnsubscribeGroupResource,
 		newTemplateResource,
 		newTemplateVersionResource,
+		newEnforceTLSResource,
 	}
 }
 
@@ -142,6 +143,7 @@ func (p *sendgridProvider) DataSources(ctx context.Context) []func() datasource.
 		newUnsubscribeGroupDataSource,
 		newTemplateDataSource,
 		newTemplateVersionDataSource,
+		newEnforceTLSDataSource,
 	}
 }
 
