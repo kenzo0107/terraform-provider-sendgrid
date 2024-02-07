@@ -159,7 +159,7 @@ func (r *templateVersionResource) Create(ctx context.Context, req resource.Creat
 
 	active, _ := plan.Active.ValueBigFloat().Int64()
 
-	o, err := r.client.CreateTemplateVersion(ctx, templateID, &sendgrid.InputCreateTemplateVersion{
+	input := &sendgrid.InputCreateTemplateVersion{
 		Active:               int(active),
 		Name:                 plan.Name.ValueString(),
 		HTMLContent:          plan.HTMLContent.ValueString(),
@@ -168,7 +168,14 @@ func (r *templateVersionResource) Create(ctx context.Context, req resource.Creat
 		Subject:              plan.Subject.ValueString(),
 		Editor:               plan.Editor.ValueString(),
 		TestData:             plan.TestData.ValueString(),
-	})
+	}
+
+	// NOTE: If true, plain_content is always generated from html_content.
+	if !plan.GeneratePlainContent.ValueBool() {
+		input.PlainContent = plan.PlainContent.ValueString()
+	}
+
+	o, err := r.client.CreateTemplateVersion(ctx, templateID, input)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Creating template version",
@@ -255,7 +262,8 @@ func (r *templateVersionResource) Update(ctx context.Context, req resource.Updat
 	if data.HTMLContent.ValueString() != "" && data.HTMLContent.ValueString() != state.HTMLContent.ValueString() {
 		input.HTMLContent = data.HTMLContent.ValueString()
 	}
-	if data.PlainContent.ValueString() != "" && data.PlainContent.ValueString() != state.PlainContent.ValueString() {
+	// NOTE: If true, plain_content is always generated from html_content.
+	if !data.GeneratePlainContent.ValueBool() && data.PlainContent.ValueString() != "" && data.PlainContent.ValueString() != state.PlainContent.ValueString() {
 		input.PlainContent = data.PlainContent.ValueString()
 	}
 	// NOTE: Even if "code" is already set, if you try to update it with "code", an error will occur.
