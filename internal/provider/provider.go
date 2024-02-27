@@ -130,6 +130,8 @@ func (p *sendgridProvider) Resources(ctx context.Context) []func() resource.Reso
 		newTemplateVersionResource,
 		newEnforceTLSResource,
 		newReverseDNSResource,
+		newSSOIntegrationResource,
+		newSSOCertificateResource,
 	}
 }
 
@@ -146,6 +148,8 @@ func (p *sendgridProvider) DataSources(ctx context.Context) []func() datasource.
 		newTemplateVersionDataSource,
 		newEnforceTLSDataSource,
 		newReverseDNSDataSource,
+		newSSOIntegrationDataSource,
+		newSSOCertificateDataSource,
 	}
 }
 
