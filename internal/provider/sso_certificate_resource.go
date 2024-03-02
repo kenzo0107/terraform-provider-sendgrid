@@ -101,11 +101,22 @@ func (r *ssoCertificateResource) Create(ctx context.Context, req resource.Create
 		Enabled:           true,
 	}
 
-	o, err := r.client.CreateSSOCertificate(ctx, input)
+	res, err := retryOnRateLimit(ctx, func() (interface{}, error) {
+		return r.client.CreateSSOCertificate(ctx, input)
+	})
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Creating sso certificate",
 			fmt.Sprintf("Unable to create sso certificate, got error: %s", err),
+		)
+		return
+	}
+
+	o, ok := res.(*sendgrid.OutputCreateSSOCertificate)
+	if !ok {
+		resp.Diagnostics.AddError(
+			"Creating sso certificate",
+			"Failed to assert type *sendgrid.OutputCreateSSOCertificate",
 		)
 		return
 	}
@@ -206,8 +217,10 @@ func (r *ssoCertificateResource) Delete(ctx context.Context, req resource.Delete
 
 	certificateId := state.ID.ValueString()
 	id, _ := strconv.ParseInt(certificateId, 10, 64)
-
-	if err := r.client.DeleteSSOCertificate(ctx, id); err != nil {
+	_, err := retryOnRateLimit(ctx, func() (interface{}, error) {
+		return nil, r.client.DeleteSSOCertificate(ctx, id)
+	})
+	if err != nil {
 		resp.Diagnostics.AddError(
 			"Deleting sso certificate",
 			fmt.Sprintf("Unable to delete sso certificate (id: %v), got error: %s", id, err),

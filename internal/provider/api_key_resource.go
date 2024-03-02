@@ -99,14 +99,26 @@ func (r *apiKeyResource) Create(ctx context.Context, req resource.CreateRequest,
 
 	scopes := flex.ExpandFrameworkStringSet(ctx, plan.Scopes)
 
-	o, err := r.client.CreateAPIKey(ctx, &sendgrid.InputCreateAPIKey{
-		Name:   plan.Name.ValueString(),
-		Scopes: scopes,
+	// NOTE: Re-execute after the re-executable time has elapsed when a rate limit occurs
+	res, err := retryOnRateLimit(ctx, func() (interface{}, error) {
+		return r.client.CreateAPIKey(ctx, &sendgrid.InputCreateAPIKey{
+			Name:   plan.Name.ValueString(),
+			Scopes: scopes,
+		})
 	})
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Creating api key",
 			fmt.Sprintf("Unable to create api key, got error: %s", err),
+		)
+		return
+	}
+
+	o, ok := res.(*sendgrid.OutputCreateAPIKey)
+	if !ok {
+		resp.Diagnostics.AddError(
+			"Creating api key",
+			"Failed to assert type *sendgrid.OutputCreateAPIKey",
 		)
 		return
 	}
@@ -233,7 +245,11 @@ func (r *apiKeyResource) Delete(ctx context.Context, req resource.DeleteRequest,
 	}
 
 	id := state.ID.ValueString()
-	err := r.client.DeleteAPIKey(ctx, id)
+
+	// NOTE: Re-execute after the re-executable time has elapsed when a rate limit occurs
+	_, err := retryOnRateLimit(ctx, func() (interface{}, error) {
+		return nil, r.client.DeleteAPIKey(ctx, id)
+	})
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Deleting api key",

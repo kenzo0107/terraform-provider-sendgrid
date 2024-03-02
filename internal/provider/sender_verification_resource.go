@@ -153,23 +153,34 @@ func (r *senderVerificationResource) Create(ctx context.Context, req resource.Cr
 		return
 	}
 
-	o, err := r.client.CreateVerifiedSenderRequest(context.TODO(), &sendgrid.InputCreateVerifiedSenderRequest{
-		Nickname:    data.Nickname.ValueString(),
-		FromEmail:   data.FromEmail.ValueString(),
-		FromName:    data.FromName.ValueString(),
-		ReplyTo:     data.ReplyTo.ValueString(),
-		ReplyToName: data.ReplyToName.ValueString(),
-		Address:     data.Address.ValueString(),
-		Address2:    data.Address2.ValueString(),
-		State:       data.State.ValueString(),
-		City:        data.City.ValueString(),
-		Zip:         data.Zip.ValueString(),
-		Country:     data.Country.ValueString(),
+	res, err := retryOnRateLimit(ctx, func() (interface{}, error) {
+		return r.client.CreateVerifiedSenderRequest(context.TODO(), &sendgrid.InputCreateVerifiedSenderRequest{
+			Nickname:    data.Nickname.ValueString(),
+			FromEmail:   data.FromEmail.ValueString(),
+			FromName:    data.FromName.ValueString(),
+			ReplyTo:     data.ReplyTo.ValueString(),
+			ReplyToName: data.ReplyToName.ValueString(),
+			Address:     data.Address.ValueString(),
+			Address2:    data.Address2.ValueString(),
+			State:       data.State.ValueString(),
+			City:        data.City.ValueString(),
+			Zip:         data.Zip.ValueString(),
+			Country:     data.Country.ValueString(),
+		})
 	})
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Creating sender verification",
 			fmt.Sprintf("Unable to verified sender, got error: %s", err),
+		)
+		return
+	}
+
+	o, ok := res.(*sendgrid.OutputCreateVerifiedSenderRequest)
+	if !ok {
+		resp.Diagnostics.AddError(
+			"Creating sender verification",
+			"Failed to assert type *sendgrid.OutputCreateVerifiedSenderRequest",
 		)
 		return
 	}
@@ -332,7 +343,10 @@ func (r *senderVerificationResource) Delete(ctx context.Context, req resource.De
 
 	verifiedSenderId := data.ID.ValueString()
 	id, _ := strconv.ParseInt(verifiedSenderId, 10, 64)
-	if err := r.client.DeleteVerifiedSender(ctx, id); err != nil {
+	_, err := retryOnRateLimit(ctx, func() (interface{}, error) {
+		return nil, r.client.DeleteVerifiedSender(ctx, id)
+	})
+	if err != nil {
 		resp.Diagnostics.AddError(
 			"Deleting sender verification",
 			fmt.Sprintf("Unable to delete verified sender (id: %s), got error: %s", verifiedSenderId, err),

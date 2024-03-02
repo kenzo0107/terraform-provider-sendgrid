@@ -99,14 +99,25 @@ func (r *templateResource) Create(ctx context.Context, req resource.CreateReques
 		return
 	}
 
-	o, err := r.client.CreateTemplate(ctx, &sendgrid.InputCreateTemplate{
-		Name:       plan.Name.ValueString(),
-		Generation: plan.Generation.ValueString(),
+	res, err := retryOnRateLimit(ctx, func() (interface{}, error) {
+		return r.client.CreateTemplate(ctx, &sendgrid.InputCreateTemplate{
+			Name:       plan.Name.ValueString(),
+			Generation: plan.Generation.ValueString(),
+		})
 	})
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Creating template",
 			fmt.Sprintf("Unable to create template, got error: %s", err),
+		)
+		return
+	}
+
+	o, ok := res.(*sendgrid.OutputCreateTemplate)
+	if !ok {
+		resp.Diagnostics.AddError(
+			"Creating template",
+			"Failed to assert type *sendgrid.OutputCreateTemplate",
 		)
 		return
 	}
