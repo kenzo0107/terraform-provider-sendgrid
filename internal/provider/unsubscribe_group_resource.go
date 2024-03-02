@@ -97,15 +97,26 @@ func (r *unsubscribeGroupResource) Create(ctx context.Context, req resource.Crea
 		return
 	}
 
-	o, err := r.client.CreateSuppressionGroup(ctx, &sendgrid.InputCreateSuppressionGroup{
-		Name:        plan.Name.ValueString(),
-		Description: plan.Description.ValueString(),
-		IsDefault:   plan.IsDefault.ValueBool(),
+	res, err := retryOnRateLimit(ctx, func() (interface{}, error) {
+		return r.client.CreateSuppressionGroup(ctx, &sendgrid.InputCreateSuppressionGroup{
+			Name:        plan.Name.ValueString(),
+			Description: plan.Description.ValueString(),
+			IsDefault:   plan.IsDefault.ValueBool(),
+		})
 	})
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Creating unsubscribe group",
 			fmt.Sprintf("Unable to create unsubscribe group, got error: %s", err),
+		)
+		return
+	}
+
+	o, ok := res.(*sendgrid.OutputCreateSuppressionGroup)
+	if !ok {
+		resp.Diagnostics.AddError(
+			"Creating unsubscribe group",
+			"Failed to assert type *sendgrid.OutputCreateSuppressionGroup",
 		)
 		return
 	}

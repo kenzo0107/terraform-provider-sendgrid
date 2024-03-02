@@ -187,11 +187,22 @@ func (r *linkBrandingResource) Create(ctx context.Context, req resource.CreateRe
 		input.Default = def
 	}
 
-	o, err := r.client.CreateBrandedLink(context.TODO(), input)
+	res, err := retryOnRateLimit(ctx, func() (interface{}, error) {
+		return r.client.CreateBrandedLink(context.TODO(), input)
+	})
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Creating branded link",
 			fmt.Sprintf("Unable to create branded link, got error: %s", err),
+		)
+		return
+	}
+
+	o, ok := res.(*sendgrid.OutputCreateBrandedLink)
+	if !ok {
+		resp.Diagnostics.AddError(
+			"Creating branded link",
+			"Failed to assert type *sendgrid.OutputCreateBrandedLink",
 		)
 		return
 	}
@@ -292,7 +303,10 @@ func (r *linkBrandingResource) Delete(ctx context.Context, req resource.DeleteRe
 
 	linkId := data.ID.ValueString()
 	id, _ := strconv.ParseInt(linkId, 10, 64)
-	if err := r.client.DeleteBrandedLink(ctx, id); err != nil {
+	_, err := retryOnRateLimit(ctx, func() (interface{}, error) {
+		return nil, r.client.DeleteBrandedLink(ctx, id)
+	})
+	if err != nil {
 		resp.Diagnostics.AddError(
 			"Deleting branded link",
 			fmt.Sprintf("Unable to delete branded link (id: %s), got error: %s", linkId, err),

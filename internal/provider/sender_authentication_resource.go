@@ -193,11 +193,22 @@ func (r *senderAuthenticationResource) Create(ctx context.Context, req resource.
 		input.CustomDkimSelector = customDkimSelector
 	}
 
-	o, err := r.client.AuthenticateDomain(context.TODO(), input)
+	res, err := retryOnRateLimit(ctx, func() (interface{}, error) {
+		return r.client.AuthenticateDomain(context.TODO(), input)
+	})
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Creating sender authentication",
 			fmt.Sprintf("Unable to authenticate domain, got error: %s", err),
+		)
+		return
+	}
+
+	o, ok := res.(*sendgrid.OutputAuthenticateDomain)
+	if !ok {
+		resp.Diagnostics.AddError(
+			"Creating sender authentication",
+			"Failed to assert type *sendgrid.OutputAuthenticateDomain",
 		)
 		return
 	}
@@ -320,7 +331,10 @@ func (r *senderAuthenticationResource) Delete(ctx context.Context, req resource.
 
 	domainId := data.ID.ValueString()
 	id, _ := strconv.ParseInt(domainId, 10, 64)
-	if err := r.client.DeleteAuthenticatedDomain(ctx, id); err != nil {
+	_, err := retryOnRateLimit(ctx, func() (interface{}, error) {
+		return nil, r.client.DeleteAuthenticatedDomain(ctx, id)
+	})
+	if err != nil {
 		resp.Diagnostics.AddError(
 			"Deleting sender authentication",
 			fmt.Sprintf("Unable to delete authenticated domain (id: %s), got error: %s", domainId, err),

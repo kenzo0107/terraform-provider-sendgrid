@@ -13,9 +13,6 @@ import (
 )
 
 func TestAccSubuserResource(t *testing.T) {
-	// NOTE: It skips the test because the resource creation process is error-prone and the test completes successfully in the local environment without any issues.
-	t.Skip()
-
 	resourceName := "sendgrid_subuser.test"
 
 	ipAddressAllowed := os.Getenv("IP_ADDRESS")

@@ -126,11 +126,22 @@ func (r *ssoIntegrationResource) Create(ctx context.Context, req resource.Create
 		input.CompletedIntegration = plan.CompletedIntegration.ValueBool()
 	}
 
-	o, err := r.client.CreateSSOIntegration(ctx, input)
+	res, err := retryOnRateLimit(ctx, func() (interface{}, error) {
+		return r.client.CreateSSOIntegration(ctx, input)
+	})
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Creating SSO Integration",
 			fmt.Sprintf("Unable to create sso integration, got error: %s", err),
+		)
+		return
+	}
+
+	o, ok := res.(*sendgrid.OutputCreateSSOIntegration)
+	if !ok {
+		resp.Diagnostics.AddError(
+			"Creating SSO Integration",
+			"Failed to assert type *sendgrid.OutputCreateSSOIntegration",
 		)
 		return
 	}
@@ -252,7 +263,10 @@ func (r *ssoIntegrationResource) Delete(ctx context.Context, req resource.Delete
 
 	id := state.ID.ValueString()
 
-	if err := r.client.DeleteSSOIntegration(ctx, id); err != nil {
+	_, err := retryOnRateLimit(ctx, func() (interface{}, error) {
+		return nil, r.client.DeleteSSOIntegration(ctx, id)
+	})
+	if err != nil {
 		resp.Diagnostics.AddError(
 			"Deleting sso integration",
 			fmt.Sprintf("Unable to delete sso integration (id: %v), got error: %s", id, err),
