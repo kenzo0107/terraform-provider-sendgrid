@@ -6,6 +6,7 @@ package provider
 import (
 	"context"
 	"os"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -13,6 +14,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/kenzo0107/sendgrid"
 )
 
@@ -42,7 +44,7 @@ func (p *sendgridProvider) Schema(ctx context.Context, req provider.SchemaReques
 	resp.Schema = schema.Schema{
 		Attributes: map[string]schema.Attribute{
 			"api_key": schema.StringAttribute{
-				MarkdownDescription: "Username for Sendgrid API. May also be provided via SENDGRID_SUBUSER environment variable.",
+				MarkdownDescription: "API Key for Sendgrid API. May also be provided via SENDGRID_API_KEY environment variable.",
 				Optional:            true,
 				Sensitive:           true,
 			},
@@ -125,6 +127,13 @@ func (p *sendgridProvider) Resources(ctx context.Context) []func() resource.Reso
 		newSenderAuthenticationResource,
 		newLinkBrandingResource,
 		newSenderVerificationResource,
+		newUnsubscribeGroupResource,
+		newTemplateResource,
+		newTemplateVersionResource,
+		newEnforceTLSResource,
+		newReverseDNSResource,
+		newSSOIntegrationResource,
+		newSSOCertificateResource,
 	}
 }
 
@@ -136,6 +145,13 @@ func (p *sendgridProvider) DataSources(ctx context.Context) []func() datasource.
 		newSenderAuthenticationDataSource,
 		newLinkBrandingDataSource,
 		newSenderVerificationDataSource,
+		newUnsubscribeGroupDataSource,
+		newTemplateDataSource,
+		newTemplateVersionDataSource,
+		newEnforceTLSDataSource,
+		newReverseDNSDataSource,
+		newSSOIntegrationDataSource,
+		newSSOCertificateDataSource,
 	}
 }
 
@@ -145,4 +161,22 @@ func New(version string) func() provider.Provider {
 			version: version,
 		}
 	}
+}
+
+func retryOnRateLimit(ctx context.Context, f func() (interface{}, error)) (resp interface{}, err error) {
+	for retry := 0; retry < 3; retry++ {
+		resp, err = f()
+		if err == nil {
+			break
+		}
+		if rle, ok := err.(*sendgrid.RateLimitedError); ok {
+			tflog.Info(ctx, "Rate limited, retrying after", map[string]interface{}{
+				"retryAfter (sec)": rle.RetryAfter.Seconds(),
+			})
+			// Sleep for the duration of the rate limit and try again.
+			time.Sleep(rle.RetryAfter)
+			continue
+		}
+	}
+	return resp, err
 }

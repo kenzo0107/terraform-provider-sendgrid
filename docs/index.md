@@ -15,14 +15,13 @@ description: |-
 ```terraform
 terraform {
   required_providers {
-    hashicups = {
-      source = "kenzo0107/sendgrid"
+    sendgrid = {
+      source = "registry.terraform.io/kenzo0107/sendgrid"
     }
   }
 }
 
 provider "sendgrid" {
-  api_key = "<your api key>"
 }
 ```
 
@@ -31,5 +30,5 @@ provider "sendgrid" {
 
 ### Optional
 
-- `api_key` (String, Sensitive) Username for Sendgrid API. May also be provided via SENDGRID_SUBUSER environment variable.
+- `api_key` (String, Sensitive) API Key for Sendgrid API. May also be provided via SENDGRID_API_KEY environment variable.
 - `subuser` (String) Subuser for Sendgrid API. May also be provided via SENDGRID_SUBUSER environment variable.
