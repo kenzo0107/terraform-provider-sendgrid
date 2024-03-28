@@ -53,3 +53,11 @@ As some scopes that cannot be defined are unclear, the current approach is to us
 
 - `id` (String) The ID of this resource.
 - `username` (String) Teammate's username
+
+## Import
+
+Import is supported using the following syntax:
+
+```shell
+% terraform import sendgrid_teammate.example <teammate's email>
+```
