@@ -134,6 +134,7 @@ func (p *sendgridProvider) Resources(ctx context.Context) []func() resource.Reso
 		newReverseDNSResource,
 		newSSOIntegrationResource,
 		newSSOCertificateResource,
+		newEventWebhookResource,
 	}
 }
 
@@ -152,6 +153,7 @@ func (p *sendgridProvider) DataSources(ctx context.Context) []func() datasource.
 		newReverseDNSDataSource,
 		newSSOIntegrationDataSource,
 		newSSOCertificateDataSource,
+		newEventWebhookDataSource,
 	}
 }
 
