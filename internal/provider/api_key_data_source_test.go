@@ -29,6 +29,7 @@ func TestAccAPIKeyDataSource(t *testing.T) {
 					resource.TestCheckTypeSetElemAttr(resourceName, "scopes.*", "user.profile.read"),
 					resource.TestCheckTypeSetElemAttr(resourceName, "scopes.*", "2fa_required"),
 					resource.TestCheckTypeSetElemAttr(resourceName, "scopes.*", "sender_verification_exempt"),
+					resource.TestCheckTypeSetElemAttr(resourceName, "scopes.*", "sender_verification_eligible"),
 				),
 			},
 		},
@@ -43,6 +44,7 @@ resource "sendgrid_api_key" "test" {
 		"user.profile.read",
 		"2fa_required",
 		"sender_verification_exempt",
+		"sender_verification_eligible",
 	]
 }
 
