@@ -22,10 +22,13 @@ var testAccProtoV6ProviderFactories = map[string]func() (tfprotov6.ProviderServe
 func testAccPreCheck(t *testing.T) {
 	t.Helper()
 
-	if err := os.Getenv("SENDGRID_API_KEY"); err == "" {
+	if v := os.Getenv("SENDGRID_API_KEY"); v == "" {
 		t.Fatal("SENDGRID_API_KEY must be set for acceptance tests")
 	}
-	if err := os.Getenv("IP_ADDRESS"); err == "" {
+	if v := os.Getenv("IP_ADDRESS"); v == "" {
 		t.Fatal("IP_ADDRESS must be set for acceptance tests")
+	}
+	if v := os.Getenv("INBOUND_PARSE_WEBHOOK_HOSTNAME"); v == "" {
+		t.Fatal("INBOUND_PARSE_WEBHOOK_HOSTNAME must be set for acceptance tests")
 	}
 }
