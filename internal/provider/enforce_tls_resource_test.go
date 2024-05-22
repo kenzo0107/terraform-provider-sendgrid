@@ -31,7 +31,7 @@ func TestAccEnforceTLSResource(t *testing.T) {
 			{
 				ResourceName:      resourceName,
 				ImportState:       true,
-				ImportStateIdFunc: importEnforceTLSStateIdFunc(resourceName),
+				ImportStateIdFunc: importEnforceTLSStateIdFunc(),
 			},
 		},
 	})
@@ -47,7 +47,7 @@ resource "sendgrid_enforce_tls" "test" {
 `, version, require_tls, require_valid_cert)
 }
 
-func importEnforceTLSStateIdFunc(resourceName string) resource.ImportStateIdFunc {
+func importEnforceTLSStateIdFunc() resource.ImportStateIdFunc {
 	return func(s *terraform.State) (string, error) {
 		return "", nil
 	}
