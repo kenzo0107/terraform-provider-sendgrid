@@ -11,7 +11,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/float64default"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/kenzo0107/sendgrid"
 )
 
@@ -102,10 +101,6 @@ func (r *enforceTLSResource) Create(ctx context.Context, req resource.CreateRequ
 		input.Version = plan.Version.ValueFloat64()
 	}
 
-	tflog.Info(ctx, "(^-^) Creating enforceTLS", map[string]interface{}{
-		"input": input,
-	})
-
 	o, err := r.client.UpdateEnforceTLS(ctx, input)
 	if err != nil {
 		resp.Diagnostics.AddError(
@@ -171,10 +166,6 @@ func (r *enforceTLSResource) Update(ctx context.Context, req resource.UpdateRequ
 	if data.Version.ValueFloat64() != state.Version.ValueFloat64() {
 		input.Version = data.Version.ValueFloat64()
 	}
-
-	tflog.Info(ctx, "(^-^) Update enforceTLS", map[string]interface{}{
-		"input": input,
-	})
 
 	o, err := r.client.UpdateEnforceTLS(ctx, input)
 	if err != nil {
