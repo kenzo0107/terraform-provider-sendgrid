@@ -135,6 +135,7 @@ func (p *sendgridProvider) Resources(ctx context.Context) []func() resource.Reso
 		newSSOIntegrationResource,
 		newSSOCertificateResource,
 		newEventWebhookResource,
+		newInboundParseWebhookResource,
 	}
 }
 
@@ -154,6 +155,7 @@ func (p *sendgridProvider) DataSources(ctx context.Context) []func() datasource.
 		newSSOIntegrationDataSource,
 		newSSOCertificateDataSource,
 		newEventWebhookDataSource,
+		newInboundParseWebhookDataSource,
 	}
 }
 
