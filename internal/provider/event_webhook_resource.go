@@ -215,11 +215,22 @@ func (r *eventWebhookResource) Create(ctx context.Context, req resource.CreateRe
 		input.OAuthTokenURL = plan.OAuthTokenURL.ValueString()
 	}
 
-	o, err := r.client.CreateEventWebhook(ctx, input)
+	res, err := retryOnRateLimit(ctx, func() (interface{}, error) {
+		return r.client.CreateEventWebhook(context.TODO(), input)
+	})
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Creating event webhook",
 			fmt.Sprintf("Unable to create event webhook, got error: %s", err),
+		)
+		return
+	}
+
+	o, ok := res.(*sendgrid.OutputCreateEventWebhook)
+	if !ok {
+		resp.Diagnostics.AddError(
+			"Creating event webhook",
+			"Failed to assert type *sendgrid.OutputCreateEventWebhook",
 		)
 		return
 	}
@@ -260,8 +271,8 @@ func (r *eventWebhookResource) Read(ctx context.Context, req resource.ReadReques
 	o, err := r.client.GetEventWebhook(ctx, id)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Reading eventWebhook",
-			fmt.Sprintf("Unable to read eventWebhook, got error: %s", err),
+			"Reading event webhook",
+			fmt.Sprintf("Unable to read event webhook, got error: %s", err),
 		)
 		return
 	}
@@ -361,9 +372,21 @@ func (r *eventWebhookResource) Update(ctx context.Context, req resource.UpdateRe
 }
 
 func (r *eventWebhookResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	var state eventWebhookResourceModel
-	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	var data eventWebhookResourceModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	id := data.ID.ValueString()
+	_, err := retryOnRateLimit(ctx, func() (interface{}, error) {
+		return nil, r.client.DeleteEventWebhook(ctx, id)
+	})
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Deleting event webhook",
+			fmt.Sprintf("Unable to delete event webhook, got error: %s", err),
+		)
 		return
 	}
 }

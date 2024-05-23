@@ -10,9 +10,12 @@ import (
 )
 
 func TestAccInboundParseWebhookDataSource(t *testing.T) {
-	resourceName := "data.sendgrid_inbound_parse_webhook.test"
-
 	hostname := os.Getenv("INBOUND_PARSE_WEBHOOK_HOSTNAME")
+	if hostname == "" {
+		t.Skip()
+	}
+
+	resourceName := "data.sendgrid_inbound_parse_webhook.test"
 	url := fmt.Sprintf("https://test-acc-%s.com", acctest.RandString(16))
 
 	resource.Test(t, resource.TestCase{

@@ -7,7 +7,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/kenzo0107/sendgrid"
 )
 
@@ -162,9 +161,6 @@ func (d *eventWebhookDataSource) Read(ctx context.Context, req datasource.ReadRe
 	}
 
 	id := s.ID.ValueString()
-	tflog.Info(ctx, "(^-^) Reading event webhook", map[string]interface{}{
-		"id": id,
-	})
 
 	o, err := d.client.GetEventWebhook(ctx, id)
 	if err != nil {

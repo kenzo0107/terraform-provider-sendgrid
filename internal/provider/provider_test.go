@@ -28,7 +28,4 @@ func testAccPreCheck(t *testing.T) {
 	if v := os.Getenv("IP_ADDRESS"); v == "" {
 		t.Fatal("IP_ADDRESS must be set for acceptance tests")
 	}
-	if v := os.Getenv("INBOUND_PARSE_WEBHOOK_HOSTNAME"); v == "" {
-		t.Fatal("INBOUND_PARSE_WEBHOOK_HOSTNAME must be set for acceptance tests")
-	}
 }
