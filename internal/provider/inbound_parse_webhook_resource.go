@@ -125,10 +125,22 @@ func (r *inboundParseWebhookResource) Create(ctx context.Context, req resource.C
 		return
 	}
 
+	// NOTE: In the response of the inbound parse webhook creation API,
+	//       spam_check and send_raw always return false.
+	//       Therefore, execute the inbound parse webhook acquisition API to acquire the current settings of spam_check and send_raw.
+	k, err := r.client.GetInboundParseWebhook(ctx, plan.Hostname.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Reading inbound parse webhook",
+			fmt.Sprintf("Unable to read inbound parse webhook, got error: %s", err),
+		)
+		return
+	}
+
 	plan = inboundParseWebhookResourceModel{
 		Hostname:  types.StringValue(o.Hostname),
-		SpamCheck: types.BoolValue(o.SpamCheck),
-		SendRaw:   types.BoolValue(o.SendRaw),
+		SpamCheck: types.BoolValue(k.SpamCheck),
+		SendRaw:   types.BoolValue(k.SendRaw),
 
 		// NOTE: Immediately after creation, the URL cannot be obtained, but since it is actually set,
 		//       the value set in plan will be used.
