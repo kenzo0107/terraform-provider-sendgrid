@@ -1,3 +1,5 @@
+version: 2
+
 # Visit https://goreleaser.com for documentation on how to customize this
 # behavior.
 before:
@@ -54,7 +56,3 @@ release:
   extra_files:
     - glob: 'terraform-registry-manifest.json'
       name_template: '{{ .ProjectName }}_{{ .Version }}_manifest.json'
-  # If you want to manually examine the release before its live, uncomment this line:
-  # draft: true
-changelog:
-  skip: true
