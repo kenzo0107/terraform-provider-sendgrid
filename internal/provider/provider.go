@@ -136,6 +136,7 @@ func (p *sendgridProvider) Resources(ctx context.Context) []func() resource.Reso
 		newSSOCertificateResource,
 		newEventWebhookResource,
 		newInboundParseWebhookResource,
+		newSSOTeammateResource,
 	}
 }
 
