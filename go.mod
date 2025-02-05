@@ -1,6 +1,7 @@
 module github.com/kenzo0107/terraform-provider-sendgrid
 
-go 1.22.3
+go 1.23.6
+
 require (
 	github.com/hashicorp/terraform-plugin-docs v0.18.0
 	github.com/hashicorp/terraform-plugin-framework v1.3.5
