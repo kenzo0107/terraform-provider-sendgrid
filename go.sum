@@ -129,8 +129,8 @@ github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99 h1:BQSFePA1RWJOl
 github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99/go.mod h1:1lJo3i6rXxKeerYnT8Nvf0QmHCRC1n8sfWVwXF2Frvo=
 github.com/jhump/protoreflect v1.6.0 h1:h5jfMVslIg6l29nsMs0D8Wj17RDVdNYti0vDN/PZZoE=
 github.com/jhump/protoreflect v1.6.0/go.mod h1:eaTn3RZAmMBcV0fifFvlm6VHNz3wSkYyXYWUh7ymB74=
-github.com/kenzo0107/sendgrid v1.3.0 h1:+l+BShAvhOFi1bpkS+7ts6LzlQcaAD7civ+hieV6FDM=
-github.com/kenzo0107/sendgrid v1.3.0/go.mod h1:o93EmGpbWbhaxLoiGB+x6g3tLof7TwbUlzjHNLvpDP8=
+github.com/kenzo0107/sendgrid v1.4.0 h1:P4QDCYavvhZIf2U27W3qBUJ8tmvis2Ej2+QuljA8PUo=
+github.com/kenzo0107/sendgrid v1.4.0/go.mod h1:o93EmGpbWbhaxLoiGB+x6g3tLof7TwbUlzjHNLvpDP8=
 github.com/kevinburke/ssh_config v1.2.0 h1:x584FjTGwHzMwvHx18PXxbBVzfnxogHaAReU4gf13a4=
 github.com/kevinburke/ssh_config v1.2.0/go.mod h1:CT57kijsi8u/K/BOFA39wgDQJ9CxiF4nAY/ojJ6r6mM=
 github.com/kr/pretty v0.1.0/go.mod h1:dAy3ld7l9f0ibDNOQOHHMYYIIbhfbHSm3C4ZsoJORNo=
