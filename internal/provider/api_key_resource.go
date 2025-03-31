@@ -191,15 +191,13 @@ func (r *apiKeyResource) Update(ctx context.Context, req resource.UpdateRequest,
 
 	var scopes []string
 	if !reflect.DeepEqual(data.Scopes, state.Scopes) {
-		for _, e := range data.Scopes.Elements() {
-			scopes = append(scopes, e.String())
-		}
+		scopes = flex.ExpandFrameworkStringSet(ctx, data.Scopes)
 	}
 
 	data.ID = types.StringValue(id)
 	data.APIKey = state.APIKey
 
-	if scopes != nil {
+	if len(scopes) > 0 {
 		// update name and scopes
 		o, err := r.client.UpdateAPIKeyNameAndScopes(ctx, id, &sendgrid.InputUpdateAPIKeyNameAndScopes{
 			Name:   data.Name.ValueString(),
