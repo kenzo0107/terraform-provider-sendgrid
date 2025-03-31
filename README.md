@@ -1,3 +1,5 @@
+[![Tests](https://github.com/kenzo0107/terraform-provider-sendgrid/actions/workflows/test.yml/badge.svg)](https://github.com/kenzo0107/terraform-provider-sendgrid/actions/workflows/test.yml)
+
 # Terraform Provider SendGrid (Terraform Plugin Framework)
 
 ## Requirements
