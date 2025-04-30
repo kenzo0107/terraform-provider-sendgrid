@@ -29,14 +29,101 @@ type ssoTeammateResource struct {
 	client *sendgrid.Client
 }
 
+type ssoSubuserAccessResourceModel struct {
+	ID             types.Int64    `tfsdk:"id"`
+	PermissionType types.String   `tfsdk:"permission_type"`
+	Scopes         []types.String `tfsdk:"scopes"`
+}
+
+func toInputSubuserAccess(model ssoSubuserAccessResourceModel) sendgrid.InputSubuserAccess {
+	input := sendgrid.InputSubuserAccess{
+		ID:             model.ID.ValueInt64(),
+		PermissionType: model.PermissionType.ValueString(),
+		Scopes:         []string{},
+	}
+
+	for _, scope := range model.Scopes {
+		input.Scopes = append(input.Scopes, scope.ValueString())
+	}
+
+	return input
+}
+
+func toInputSubuserAccessArray(subuserAccess []ssoSubuserAccessResourceModel) []sendgrid.InputSubuserAccess {
+	saArrayInput := make([]sendgrid.InputSubuserAccess, 0, len(subuserAccess))
+	for _, sa := range subuserAccess {
+		saArrayInput = append(saArrayInput, toInputSubuserAccess(sa))
+	}
+	return saArrayInput
+}
+
+func fromOutputSubuserAccess(output sendgrid.OutputSubuserAccess) ssoSubuserAccessResourceModel {
+	model := ssoSubuserAccessResourceModel{
+		ID:             types.Int64Value(output.ID),
+		PermissionType: types.StringValue(output.PermissionType),
+		Scopes:         nil,
+	}
+
+	if len(output.Scopes) > 0 {
+		model.Scopes = make([]types.String, 0, len(output.Scopes))
+		for _, scope := range output.Scopes {
+			model.Scopes = append(model.Scopes, types.StringValue(scope))
+		}
+	}
+
+	return model
+}
+
+func fromOutputSubuserAccessArray(output []sendgrid.OutputSubuserAccess) []ssoSubuserAccessResourceModel {
+	if len(output) == 0 {
+		return nil
+	}
+
+	saArrayOutput := make([]ssoSubuserAccessResourceModel, 0, len(output))
+	for _, sa := range output {
+		saArrayOutput = append(saArrayOutput, fromOutputSubuserAccess(sa))
+	}
+	return saArrayOutput
+}
+
+func fromSendgridSubuserAccess(output sendgrid.SubuserAccess) ssoSubuserAccessResourceModel {
+	model := ssoSubuserAccessResourceModel{
+		ID:             types.Int64Value(output.ID),
+		PermissionType: types.StringValue(output.PermissionType),
+		Scopes:         nil,
+	}
+
+	if len(output.Scopes) > 0 {
+		model.Scopes = make([]types.String, 0, len(output.Scopes))
+		for _, scope := range output.Scopes {
+			model.Scopes = append(model.Scopes, types.StringValue(scope))
+		}
+	}
+
+	return model
+}
+
+func fromSendgridSubuserAccessArray(output []sendgrid.SubuserAccess) []ssoSubuserAccessResourceModel {
+	if len(output) == 0 {
+		return nil
+	}
+
+	saArrayOutput := make([]ssoSubuserAccessResourceModel, 0, len(output))
+	for _, sa := range output {
+		saArrayOutput = append(saArrayOutput, fromSendgridSubuserAccess(sa))
+	}
+	return saArrayOutput
+}
+
 type ssoTeammateResourceModel struct {
-	ID        types.String   `tfsdk:"id"`
-	Email     types.String   `tfsdk:"email"`
-	IsAdmin   types.Bool     `tfsdk:"is_admin"`
-	Scopes    []types.String `tfsdk:"scopes"`
-	Username  types.String   `tfsdk:"username"`
-	FirstName types.String   `tfsdk:"first_name"`
-	LastName  types.String   `tfsdk:"last_name"`
+	ID            types.String                    `tfsdk:"id"`
+	Email         types.String                    `tfsdk:"email"`
+	IsAdmin       types.Bool                      `tfsdk:"is_admin"`
+	Scopes        []types.String                  `tfsdk:"scopes"`
+	Username      types.String                    `tfsdk:"username"`
+	FirstName     types.String                    `tfsdk:"first_name"`
+	LastName      types.String                    `tfsdk:"last_name"`
+	SubuserAccess []ssoSubuserAccessResourceModel `tfsdk:"subuser_access"`
 }
 
 func (r *ssoTeammateResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -74,11 +161,9 @@ For more detailed information, please see the [SendGrid documentation](https://d
 				Default:             booldefault.StaticBool(false),
 			},
 			"scopes": schema.SetAttribute{
-				ElementType: types.StringType,
-				MarkdownDescription: `
-				Add or remove permissions from a Teammate using this scopes property. See [Teammate Permissions](https://www.twilio.com/docs/sendgrid/ui/account-and-settings/teammate-permissions) for a complete list of available scopes. You should not include this propety in the request when using the persona property or when setting the is_admin property to true—assigning a persona or setting is_admin to true will allocate a group of permissions to the Teammate.
-				`,
-				Required: true,
+				ElementType:         types.StringType,
+				MarkdownDescription: "Add or remove permissions from a Teammate using this scopes property. See [Teammate Permissions](https://www.twilio.com/docs/sendgrid/ui/account-and-settings/teammate-permissions) for a complete list of available scopes. You should not include this propety in the request when setting the `is_admin` property to `true` or `subuser_access` property to a list of subuser accesses.",
+				Optional:            true,
 			},
 			"first_name": schema.StringAttribute{
 				MarkdownDescription: "Teammate's first name",
@@ -87,6 +172,27 @@ For more detailed information, please see the [SendGrid documentation](https://d
 			"last_name": schema.StringAttribute{
 				MarkdownDescription: "Teammate's last name",
 				Required:            true,
+			},
+			"subuser_access": schema.ListNestedAttribute{
+				Optional:            true,
+				MarkdownDescription: "Specify which Subusers the Teammate may access and act on behalf of.",
+				NestedObject: schema.NestedAttributeObject{
+					Attributes: map[string]schema.Attribute{
+						"id": schema.Int64Attribute{
+							MarkdownDescription: "Set this property to the ID of a Subuser to which the Teammate should have access.",
+							Required:            true,
+						},
+						"permission_type": schema.StringAttribute{
+							MarkdownDescription: "Grant the level of access the Teammate should have to the specified Subuser with this property. This property value may be either `admin` or `restricted`. When set to `restricted`, the Teammate has only the permissions assigned in the `scopes` property.",
+							Required:            true,
+						},
+						"scopes": schema.SetAttribute{
+							ElementType:         types.StringType,
+							Optional:            true,
+							MarkdownDescription: "Add or remove permissions that the Teammate can access on behalf of the Subuser. See [Teammate Permissions](https://www.twilio.com/docs/sendgrid/ui/account-and-settings/teammate-permissions) for a complete list of available scopes. You should not include this property in the request when the `permission_type` property is set to `admin` — administrators have full access to the specified Subuser.",
+						},
+					},
+				},
 			},
 		},
 	}
@@ -119,10 +225,12 @@ func (r *ssoTeammateResource) Create(ctx context.Context, req resource.CreateReq
 	}
 
 	input := &sendgrid.InputCreateSSOTeammate{
-		Email:     data.Email.ValueString(),
-		FirstName: data.FirstName.ValueString(),
-		LastName:  data.LastName.ValueString(),
-		IsAdmin:   data.IsAdmin.ValueBool(),
+		Email:                      data.Email.ValueString(),
+		FirstName:                  data.FirstName.ValueString(),
+		LastName:                   data.LastName.ValueString(),
+		IsAdmin:                    data.IsAdmin.ValueBool(),
+		HasRestrictedSubuserAccess: len(data.SubuserAccess) > 0,
+		SubuserAccess:              toInputSubuserAccessArray(data.SubuserAccess),
 	}
 
 	if !data.IsAdmin.ValueBool() {
@@ -152,6 +260,13 @@ func (r *ssoTeammateResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 
+	saArray := fromOutputSubuserAccessArray(o.SubuserAccess)
+	// NOTE: The teammate read API returns subuser access with admin permissions to all subusers when the user is admin,
+	//       causing a discrepancy with the subuser access specified in the resource and resulting in an error.
+	if o.IsAdmin {
+		saArray = nil
+	}
+
 	data = ssoTeammateResourceModel{
 		ID:        types.StringValue(o.Email),
 		Email:     types.StringValue(o.Email),
@@ -163,7 +278,8 @@ func (r *ssoTeammateResource) Create(ctx context.Context, req resource.CreateReq
 		// NOTE: The teammate creation API returns an empty value for scopes,
 		//       causing a discrepancy with the scopes specified in the resource and resulting in an error.
 		//       To avoid this issue, we will adopt the specified scopes as-is.
-		Scopes: data.Scopes,
+		Scopes:        data.Scopes,
+		SubuserAccess: saArray,
 	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -190,21 +306,50 @@ func (r *ssoTeammateResource) Read(ctx context.Context, req resource.ReadRequest
 		return
 	}
 
+	sa, err := r.client.GetTeammateSubuserAccess(
+		ctx,
+		email,
+		&sendgrid.InputGetTeammateSubuserAccess{
+			Username: email,
+		},
+	)
+
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Reading SSO teammate subuser access",
+			fmt.Sprintf("Unable to read SSO teammate subuser access, got error: %s", err),
+		)
+		return
+	}
+
 	scopes := []types.String{}
 	if !data.IsAdmin.ValueBool() {
 		for _, s := range o.Scopes {
 			scopes = append(scopes, types.StringValue(s))
 		}
 	}
+	saArray := fromSendgridSubuserAccessArray(sa.SubuserAccess)
+
+	// NOTE: The teammate read API returns scopes even if the subuser access is set,
+	//       causing a discrepancy with the scopes specified in the resource and resulting in an error.
+	if len(sa.SubuserAccess) > 0 {
+		scopes = nil
+	}
+	// NOTE: The teammate read API returns subuser access with admin permissions to all subusers when the user is admin,
+	//       causing a discrepancy with the subuser access specified in the resource and resulting in an error.
+	if o.IsAdmin {
+		saArray = nil
+	}
 
 	data = ssoTeammateResourceModel{
-		ID:        types.StringValue(o.Email),
-		Email:     types.StringValue(o.Email),
-		IsAdmin:   types.BoolValue(o.IsAdmin),
-		Username:  types.StringValue(o.Username),
-		FirstName: types.StringValue(o.FirstName),
-		LastName:  types.StringValue(o.LastName),
-		Scopes:    scopes,
+		ID:            types.StringValue(o.Email),
+		Email:         types.StringValue(o.Email),
+		IsAdmin:       types.BoolValue(o.IsAdmin),
+		Username:      types.StringValue(o.Username),
+		FirstName:     types.StringValue(o.FirstName),
+		LastName:      types.StringValue(o.LastName),
+		Scopes:        scopes,
+		SubuserAccess: saArray,
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
@@ -236,10 +381,12 @@ func (r *ssoTeammateResource) Update(ctx context.Context, req resource.UpdateReq
 	}
 
 	o, err := r.client.UpdateSSOTeammate(ctx, email, &sendgrid.InputUpdateSSOTeammate{
-		IsAdmin:   data.IsAdmin.ValueBool(),
-		Scopes:    scopes,
-		FirstName: data.FirstName.ValueString(),
-		LastName:  data.LastName.ValueString(),
+		IsAdmin:                    data.IsAdmin.ValueBool(),
+		Scopes:                     scopes,
+		FirstName:                  data.FirstName.ValueString(),
+		LastName:                   data.LastName.ValueString(),
+		HasRestrictedSubuserAccess: len(data.SubuserAccess) > 0,
+		SubuserAccess:              toInputSubuserAccessArray(data.SubuserAccess),
 	})
 	if err != nil {
 		resp.Diagnostics.AddError(
@@ -253,14 +400,28 @@ func (r *ssoTeammateResource) Update(ctx context.Context, req resource.UpdateReq
 	for _, s := range o.Scopes {
 		scopesSet = append(scopesSet, types.StringValue(s))
 	}
+	saArray := fromOutputSubuserAccessArray(o.SubuserAccess)
+
+	// NOTE: The teammate read API returns scopes even if the subuser access is set,
+	//       causing a discrepancy with the scopes specified in the resource and resulting in an error.
+	if len(o.SubuserAccess) > 0 {
+		scopesSet = nil
+	}
+	// NOTE: The teammate read API returns subuser access with admin permissions to all subusers when the user is admin,
+	//       causing a discrepancy with the subuser access specified in the resource and resulting in an error.
+	if o.IsAdmin {
+		saArray = nil
+	}
+
 	data = ssoTeammateResourceModel{
-		ID:        types.StringValue(o.Email),
-		Email:     types.StringValue(o.Email),
-		IsAdmin:   types.BoolValue(o.IsAdmin),
-		Username:  types.StringValue(o.Username),
-		Scopes:    scopesSet,
-		FirstName: types.StringValue(o.FirstName),
-		LastName:  types.StringValue(o.LastName),
+		ID:            types.StringValue(o.Email),
+		Email:         types.StringValue(o.Email),
+		IsAdmin:       types.BoolValue(o.IsAdmin),
+		Username:      types.StringValue(o.Username),
+		Scopes:        scopesSet,
+		FirstName:     types.StringValue(o.FirstName),
+		LastName:      types.StringValue(o.LastName),
+		SubuserAccess: saArray,
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
@@ -355,19 +516,48 @@ func (r *ssoTeammateResource) ImportState(ctx context.Context, req resource.Impo
 		return
 	}
 
+	sa, err := r.client.GetTeammateSubuserAccess(
+		ctx,
+		email,
+		&sendgrid.InputGetTeammateSubuserAccess{
+			Username: email,
+		},
+	)
+
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Reading SSO teammate subuser access",
+			fmt.Sprintf("Unable to read SSO teammate subuser access, got error: %s", err),
+		)
+		return
+	}
+
 	scopes := []types.String{}
 	for _, s := range teammate.Scopes {
 		scopes = append(scopes, types.StringValue(s))
 	}
+	saArray := fromSendgridSubuserAccessArray(sa.SubuserAccess)
+
+	// NOTE: The teammate read API returns scopes even if the subuser access is set,
+	//       causing a discrepancy with the scopes specified in the resource and resulting in an error.
+	if len(sa.SubuserAccess) > 0 {
+		scopes = nil
+	}
+	// NOTE: The teammate read API returns subuser access with admin permissions to all subusers when the user is admin,
+	//       causing a discrepancy with the subuser access specified in the resource and resulting in an error.
+	if teammate.IsAdmin {
+		saArray = nil
+	}
 
 	data = ssoTeammateResourceModel{
-		ID:        types.StringValue(teammate.Email),
-		Email:     types.StringValue(teammate.Email),
-		IsAdmin:   types.BoolValue(teammate.IsAdmin),
-		Username:  types.StringValue(teammate.Username),
-		Scopes:    scopes,
-		FirstName: types.StringValue(teammate.FirstName),
-		LastName:  types.StringValue(teammate.LastName),
+		ID:            types.StringValue(teammate.Email),
+		Email:         types.StringValue(teammate.Email),
+		IsAdmin:       types.BoolValue(teammate.IsAdmin),
+		Username:      types.StringValue(teammate.Username),
+		Scopes:        scopes,
+		FirstName:     types.StringValue(teammate.FirstName),
+		LastName:      types.StringValue(teammate.LastName),
+		SubuserAccess: saArray,
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
