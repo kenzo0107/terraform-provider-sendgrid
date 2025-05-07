@@ -7,12 +7,17 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/boolvalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/kenzo0107/sendgrid"
 )
@@ -159,11 +164,23 @@ For more detailed information, please see the [SendGrid documentation](https://d
 				Optional:            true,
 				Computed:            true,
 				Default:             booldefault.StaticBool(false),
+				Validators: []validator.Bool{
+					boolvalidator.ConflictsWith(
+						path.MatchRelative().AtParent().AtName("subuser_access"),
+						path.MatchRelative().AtParent().AtName("is_admin"),
+					),
+				},
 			},
 			"scopes": schema.SetAttribute{
 				ElementType:         types.StringType,
 				MarkdownDescription: "Add or remove permissions from a Teammate using this scopes property. See [Teammate Permissions](https://www.twilio.com/docs/sendgrid/ui/account-and-settings/teammate-permissions) for a complete list of available scopes. You should not include this propety in the request when setting the `is_admin` property to `true` or `subuser_access` property to a list of subuser accesses.",
 				Optional:            true,
+				Validators: []validator.Set{
+					setvalidator.ConflictsWith(
+						path.MatchRelative().AtParent().AtName("subuser_access"),
+						path.MatchRelative().AtParent().AtName("is_admin"),
+					),
+				},
 			},
 			"first_name": schema.StringAttribute{
 				MarkdownDescription: "Teammate's first name",
@@ -176,6 +193,12 @@ For more detailed information, please see the [SendGrid documentation](https://d
 			"subuser_access": schema.ListNestedAttribute{
 				Optional:            true,
 				MarkdownDescription: "Specify which Subusers the Teammate may access and act on behalf of.",
+				Validators: []validator.List{
+					listvalidator.ConflictsWith(
+						path.MatchRelative().AtParent().AtName("scopes"),
+						path.MatchRelative().AtParent().AtName("is_admin"),
+					),
+				},
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"id": schema.Int64Attribute{
@@ -185,6 +208,9 @@ For more detailed information, please see the [SendGrid documentation](https://d
 						"permission_type": schema.StringAttribute{
 							MarkdownDescription: "Grant the level of access the Teammate should have to the specified Subuser with this property. This property value may be either `admin` or `restricted`. When set to `restricted`, the Teammate has only the permissions assigned in the `scopes` property.",
 							Required:            true,
+							Validators: []validator.String{
+								stringvalidator.OneOf("admin", "restricted"),
+							},
 						},
 						"scopes": schema.SetAttribute{
 							ElementType:         types.StringType,
@@ -339,6 +365,7 @@ func (r *ssoTeammateResource) Read(ctx context.Context, req resource.ReadRequest
 	//       causing a discrepancy with the subuser access specified in the resource and resulting in an error.
 	if o.IsAdmin {
 		saArray = nil
+		scopes = nil
 	}
 
 	data = ssoTeammateResourceModel{
@@ -411,6 +438,7 @@ func (r *ssoTeammateResource) Update(ctx context.Context, req resource.UpdateReq
 	//       causing a discrepancy with the subuser access specified in the resource and resulting in an error.
 	if o.IsAdmin {
 		saArray = nil
+		scopesSet = nil
 	}
 
 	data = ssoTeammateResourceModel{

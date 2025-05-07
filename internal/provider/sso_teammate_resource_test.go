@@ -61,7 +61,6 @@ resource "sendgrid_sso_teammate" "test" {
 	first_name = "%s"
 	last_name  = "%s"
 	is_admin   = true
-	scopes     = []
 }
 `, email, firstName, lastName)
 }
