@@ -167,7 +167,7 @@ For more detailed information, please see the [SendGrid documentation](https://d
 				Validators: []validator.Bool{
 					boolvalidator.ConflictsWith(
 						path.MatchRelative().AtParent().AtName("subuser_access"),
-						path.MatchRelative().AtParent().AtName("is_admin"),
+						path.MatchRelative().AtParent().AtName("scopes"),
 					),
 				},
 			},
