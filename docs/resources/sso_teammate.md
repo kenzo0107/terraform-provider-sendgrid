@@ -24,7 +24,6 @@ resource "sendgrid_sso_teammate" "example" {
   first_name = "first"
   last_name  = "last"
   is_admin   = true
-  scopes     = []
 }
 ```
 
