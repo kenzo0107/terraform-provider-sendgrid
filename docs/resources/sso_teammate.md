@@ -24,7 +24,6 @@ resource "sendgrid_sso_teammate" "example" {
   first_name = "first"
   last_name  = "last"
   is_admin   = true
-  scopes     = []
 }
 ```
 
@@ -36,16 +35,29 @@ resource "sendgrid_sso_teammate" "example" {
 - `email` (String) Teammate's email
 - `first_name` (String) Teammate's first name
 - `last_name` (String) Teammate's last name
-- `scopes` (Set of String) Add or remove permissions from a Teammate using this scopes property. See [Teammate Permissions](https://www.twilio.com/docs/sendgrid/ui/account-and-settings/teammate-permissions) for a complete list of available scopes. You should not include this propety in the request when using the persona property or when setting the is_admin property to true—assigning a persona or setting is_admin to true will allocate a group of permissions to the Teammate.
 
 ### Optional
 
 - `is_admin` (Boolean) Set to true if teammate has admin privileges.
+- `scopes` (Set of String) Add or remove permissions from a Teammate using this scopes property. See [Teammate Permissions](https://www.twilio.com/docs/sendgrid/ui/account-and-settings/teammate-permissions) for a complete list of available scopes. You should not include this propety in the request when setting the `is_admin` property to `true` or `subuser_access` property to a list of subuser accesses.
+- `subuser_access` (Attributes List) Specify which Subusers the Teammate may access and act on behalf of. (see [below for nested schema](#nestedatt--subuser_access))
 
 ### Read-Only
 
 - `id` (String) The ID of this resource.
 - `username` (String) Teammate's username
+
+<a id="nestedatt--subuser_access"></a>
+### Nested Schema for `subuser_access`
+
+Required:
+
+- `id` (Number) Set this property to the ID of a Subuser to which the Teammate should have access.
+- `permission_type` (String) Grant the level of access the Teammate should have to the specified Subuser with this property. This property value may be either `admin` or `restricted`. When set to `restricted`, the Teammate has only the permissions assigned in the `scopes` property.
+
+Optional:
+
+- `scopes` (Set of String) Add or remove permissions that the Teammate can access on behalf of the Subuser. See [Teammate Permissions](https://www.twilio.com/docs/sendgrid/ui/account-and-settings/teammate-permissions) for a complete list of available scopes. You should not include this property in the request when the `permission_type` property is set to `admin` — administrators have full access to the specified Subuser.
 
 ## Import
 
