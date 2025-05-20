@@ -6,3 +6,12 @@ updates:
     directory: "/"
     schedule:
       interval: "daily"
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - version-update:semver-minor
+          - version-update:semver-patch
