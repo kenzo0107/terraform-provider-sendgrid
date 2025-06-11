@@ -210,7 +210,8 @@ func (r *apiKeyResource) Update(ctx context.Context, req resource.UpdateRequest,
 			)
 			return
 		}
-		s, d := types.SetValueFrom(ctx, types.StringType, o.Scopes)
+		data.Name = types.StringValue(o.Name)
+		s, d := types.SetValueFrom(ctx, types.StringType, scopes)
 		data.Scopes = s
 		resp.Diagnostics.Append(d...)
 	} else {
