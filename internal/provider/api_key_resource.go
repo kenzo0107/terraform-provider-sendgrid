@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -33,6 +34,12 @@ type apiKeyResourceModel struct {
 	Name   types.String `tfsdk:"name"`
 	Scopes types.Set    `tfsdk:"scopes"`
 	APIKey types.String `tfsdk:"api_key"`
+}
+
+var defaultScopes = []string{
+	"sender_verification_exempt",
+	"sender_verification_eligible",
+	"2fa_required",
 }
 
 func (r *apiKeyResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -98,6 +105,14 @@ func (r *apiKeyResource) Create(ctx context.Context, req resource.CreateRequest,
 	}
 
 	scopes := flex.ExpandFrameworkStringSet(ctx, plan.Scopes)
+
+	if !flex.ContainsAll(defaultScopes, scopes) {
+		resp.Diagnostics.AddError(
+			"Creating api key",
+			fmt.Sprintf("Unable to create api key, got error: scopes must include default scopes: %s", strings.Join(defaultScopes, ", ")),
+		)
+		return
+	}
 
 	// NOTE: Re-execute after the re-executable time has elapsed when a rate limit occurs
 	res, err := retryOnRateLimit(ctx, func() (interface{}, error) {
@@ -198,6 +213,15 @@ func (r *apiKeyResource) Update(ctx context.Context, req resource.UpdateRequest,
 	data.APIKey = state.APIKey
 
 	if len(scopes) > 0 {
+		// check if scopes include default scopes
+		if !flex.ContainsAll(defaultScopes, scopes) {
+			resp.Diagnostics.AddError(
+				"Updating api key",
+				fmt.Sprintf("Unable to update api key, got error: scopes must include default scopes: %s", strings.Join(defaultScopes, ", ")),
+			)
+			return
+		}
+
 		// update name and scopes
 		o, err := r.client.UpdateAPIKeyNameAndScopes(ctx, id, &sendgrid.InputUpdateAPIKeyNameAndScopes{
 			Name:   data.Name.ValueString(),
