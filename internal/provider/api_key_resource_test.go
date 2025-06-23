@@ -30,6 +30,7 @@ func TestAccAPIKeyResource(t *testing.T) {
 					resource.TestCheckTypeSetElemAttr(resourceName, "scopes.*", "user.profile.read"),
 					resource.TestCheckTypeSetElemAttr(resourceName, "scopes.*", "2fa_required"),
 					resource.TestCheckTypeSetElemAttr(resourceName, "scopes.*", "sender_verification_exempt"),
+					resource.TestCheckTypeSetElemAttr(resourceName, "scopes.*", "sender_verification_eligible"),
 					resource.TestCheckResourceAttrSet(resourceName, "api_key"),
 				),
 			},
