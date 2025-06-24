@@ -6,6 +6,8 @@ package provider
 import (
 	"context"
 	"fmt"
+	"slices"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -18,6 +20,277 @@ import (
 // Ensure provider defined types fully satisfy framework interfaces.
 var _ resource.Resource = &teammateResource{}
 var _ resource.ResourceWithImportState = &teammateResource{}
+
+var autoScopes = []string{
+	"2fa_exempt",
+	"2fa_required",
+	"sender_verification_exempt",
+	"sender_verification_eligible",
+}
+
+// see: https://api.sendgrid.com/v3/scopes
+var validScopes = []string{
+	"access_settings.activity.read",
+	"access_settings.whitelist.create",
+	"access_settings.whitelist.delete",
+	"access_settings.whitelist.read",
+	"access_settings.whitelist.update",
+	"alerts.create",
+	"alerts.delete",
+	"alerts.read",
+	"alerts.update",
+	"api_keys.create",
+	"api_keys.delete",
+	"api_keys.read",
+	"api_keys.update",
+	"asm.groups.create",
+	"asm.groups.delete",
+	"asm.groups.read",
+	"asm.groups.suppressions.create",
+	"asm.groups.suppressions.delete",
+	"asm.groups.suppressions.read",
+	"asm.groups.suppressions.update",
+	"asm.groups.update",
+	"asm.suppressions.global.create",
+	"asm.suppressions.global.delete",
+	"asm.suppressions.global.read",
+	"asm.suppressions.global.update",
+	"billing.create",
+	"billing.delete",
+	"billing.read",
+	"billing.update",
+	"browsers.stats.read",
+	"categories.create",
+	"categories.delete",
+	"categories.read",
+	"categories.stats.read",
+	"categories.stats.sums.read",
+	"categories.update",
+	"clients.desktop.stats.read",
+	"clients.phone.stats.read",
+	"clients.stats.read",
+	"clients.tablet.stats.read",
+	"clients.webmail.stats.read",
+	"credentials.create",
+	"credentials.delete",
+	"credentials.read",
+	"credentials.update",
+	"design_library.create",
+	"design_library.delete",
+	"design_library.read",
+	"design_library.update",
+	"devices.stats.read",
+	"di.bounce_block_classification.read",
+	"email_testing.read",
+	"email_testing.write",
+	"geo.stats.read",
+	"ips.assigned.read",
+	"ips.create",
+	"ips.delete",
+	"ips.pools.create",
+	"ips.pools.delete",
+	"ips.pools.ips.create",
+	"ips.pools.ips.delete",
+	"ips.pools.ips.read",
+	"ips.pools.ips.update",
+	"ips.pools.read",
+	"ips.pools.update",
+	"ips.read",
+	"ips.update",
+	"ips.warmup.create",
+	"ips.warmup.delete",
+	"ips.warmup.read",
+	"ips.warmup.update",
+	"mail.batch.create",
+	"mail.batch.delete",
+	"mail.batch.read",
+	"mail.batch.update",
+	"mail.send",
+	"mail_settings.address_whitelist.create",
+	"mail_settings.address_whitelist.delete",
+	"mail_settings.address_whitelist.read",
+	"mail_settings.address_whitelist.update",
+	"mail_settings.bcc.create",
+	"mail_settings.bcc.delete",
+	"mail_settings.bcc.read",
+	"mail_settings.bcc.update",
+	"mail_settings.bounce_purge.create",
+	"mail_settings.bounce_purge.delete",
+	"mail_settings.bounce_purge.read",
+	"mail_settings.bounce_purge.update",
+	"mail_settings.footer.create",
+	"mail_settings.footer.delete",
+	"mail_settings.footer.read",
+	"mail_settings.footer.update",
+	"mail_settings.forward_bounce.create",
+	"mail_settings.forward_bounce.delete",
+	"mail_settings.forward_bounce.read",
+	"mail_settings.forward_bounce.update",
+	"mail_settings.forward_spam.create",
+	"mail_settings.forward_spam.delete",
+	"mail_settings.forward_spam.read",
+	"mail_settings.forward_spam.update",
+	"mail_settings.plain_content.create",
+	"mail_settings.plain_content.delete",
+	"mail_settings.plain_content.read",
+	"mail_settings.plain_content.update",
+	"mail_settings.read",
+	"mail_settings.spam_check.create",
+	"mail_settings.spam_check.delete",
+	"mail_settings.spam_check.read",
+	"mail_settings.spam_check.update",
+	"mail_settings.template.create",
+	"mail_settings.template.delete",
+	"mail_settings.template.read",
+	"mail_settings.template.update",
+	"mailbox_providers.stats.read",
+	"marketing.automation.read",
+	"marketing.read",
+	"messages.read",
+	"newsletter.create",
+	"newsletter.delete",
+	"newsletter.read",
+	"newsletter.update",
+	"partner_settings.new_relic.create",
+	"partner_settings.new_relic.delete",
+	"partner_settings.new_relic.read",
+	"partner_settings.new_relic.update",
+	"partner_settings.read",
+	"partner_settings.sendwithus.create",
+	"partner_settings.sendwithus.delete",
+	"partner_settings.sendwithus.read",
+	"partner_settings.sendwithus.update",
+	"recipients.erasejob.create",
+	"recipients.erasejob.read",
+	"sender_verification_eligible",
+	"signup.trigger_confirmation",
+	"sso.settings.create",
+	"sso.settings.delete",
+	"sso.settings.read",
+	"sso.settings.update",
+	"sso.teammates.create",
+	"sso.teammates.update",
+	"stats.global.read",
+	"stats.read",
+	"subusers.create",
+	"subusers.credits.create",
+	"subusers.credits.delete",
+	"subusers.credits.read",
+	"subusers.credits.remaining.create",
+	"subusers.credits.remaining.delete",
+	"subusers.credits.remaining.read",
+	"subusers.credits.remaining.update",
+	"subusers.credits.update",
+	"subusers.delete",
+	"subusers.monitor.create",
+	"subusers.monitor.delete",
+	"subusers.monitor.read",
+	"subusers.monitor.update",
+	"subusers.read",
+	"subusers.reputations.read",
+	"subusers.stats.monthly.read",
+	"subusers.stats.read",
+	"subusers.stats.sums.read",
+	"subusers.summary.read",
+	"subusers.update",
+	"suppression.blocks.create",
+	"suppression.blocks.delete",
+	"suppression.blocks.read",
+	"suppression.blocks.update",
+	"suppression.bounces.create",
+	"suppression.bounces.delete",
+	"suppression.bounces.read",
+	"suppression.bounces.update",
+	"suppression.create",
+	"suppression.delete",
+	"suppression.invalid_emails.create",
+	"suppression.invalid_emails.delete",
+	"suppression.invalid_emails.read",
+	"suppression.invalid_emails.update",
+	"suppression.read",
+	"suppression.spam_reports.create",
+	"suppression.spam_reports.delete",
+	"suppression.spam_reports.read",
+	"suppression.spam_reports.update",
+	"suppression.unsubscribes.create",
+	"suppression.unsubscribes.delete",
+	"suppression.unsubscribes.read",
+	"suppression.unsubscribes.update",
+	"suppression.update",
+	"teammates.create",
+	"teammates.delete",
+	"teammates.read",
+	"teammates.update",
+	"templates.create",
+	"templates.delete",
+	"templates.read",
+	"templates.update",
+	"templates.versions.activate.create",
+	"templates.versions.activate.delete",
+	"templates.versions.activate.read",
+	"templates.versions.activate.update",
+	"templates.versions.create",
+	"templates.versions.delete",
+	"templates.versions.read",
+	"templates.versions.update",
+	"tracking_settings.click.create",
+	"tracking_settings.click.delete",
+	"tracking_settings.click.read",
+	"tracking_settings.click.update",
+	"tracking_settings.google_analytics.create",
+	"tracking_settings.google_analytics.delete",
+	"tracking_settings.google_analytics.read",
+	"tracking_settings.google_analytics.update",
+	"tracking_settings.open.create",
+	"tracking_settings.open.delete",
+	"tracking_settings.open.read",
+	"tracking_settings.open.update",
+	"tracking_settings.read",
+	"tracking_settings.subscription.create",
+	"tracking_settings.subscription.delete",
+	"tracking_settings.subscription.read",
+	"tracking_settings.subscription.update",
+	"ui.confirm_email",
+	"ui.provision",
+	"ui.signup_complete",
+	"user.account.read",
+	"user.credits.read",
+	"user.email.read",
+	"user.profile.create",
+	"user.profile.delete",
+	"user.profile.read",
+	"user.profile.update",
+	"user.scheduled_sends.create",
+	"user.scheduled_sends.delete",
+	"user.scheduled_sends.read",
+	"user.scheduled_sends.update",
+	"user.settings.enforced_tls.read",
+	"user.settings.enforced_tls.update",
+	"user.timezone.create",
+	"user.timezone.delete",
+	"user.timezone.read",
+	"user.timezone.update",
+	"user.username.read",
+	"user.webhooks.event.settings.create",
+	"user.webhooks.event.settings.delete",
+	"user.webhooks.event.settings.read",
+	"user.webhooks.event.settings.update",
+	"user.webhooks.event.test.create",
+	"user.webhooks.event.test.delete",
+	"user.webhooks.event.test.read",
+	"user.webhooks.event.test.update",
+	"user.webhooks.parse.settings.create",
+	"user.webhooks.parse.settings.delete",
+	"user.webhooks.parse.settings.read",
+	"user.webhooks.parse.settings.update",
+	"user.webhooks.parse.stats.read",
+	"validations.email.create",
+	"validations.email.read",
+	"whitelabel.create",
+	"whitelabel.delete",
+	"whitelabel.read",
+	"whitelabel.update",
+}
 
 func newTeammateResource() resource.Resource {
 	return &teammateResource{}
@@ -73,10 +346,15 @@ The permissions API Key has access to.
 
 For more detailed information, please see the [SendGrid documentation](https://docs.sendgrid.com/ui/account-and-settings/teammate-permissions#persona-scopes)
 
-Note:
-Since scopes are automatically added after registering the usernames of invited teammates, there's a possibility that they might differ from the values defined in the Terraform code.
-As some scopes that cannot be defined are unclear, the current approach is to use ignore_changes to avoid modifications and instead set permissions on the dashboard, which is preferable.
-				`,
+The following Scopes are set automatically by SendGrid, so they cannot be set manually:
+
+- 2fa_exempt
+- 2fa_required
+- sender_verification_exempt
+- sender_verification_eligible
+
+A teammate remains in a pending state until the invitation is accepted, during which scopes cannot be modified.
+`,
 				Required: true,
 			},
 		},
@@ -114,11 +392,32 @@ func (r *teammateResource) Create(ctx context.Context, req resource.CreateReques
 		IsAdmin: data.IsAdmin.ValueBool(),
 	}
 
+	// adminitors have all scopes, so we don't need to set them.
 	if !data.IsAdmin.ValueBool() {
 		var scopes []string
 		for _, s := range data.Scopes {
+			// If scopes automatically added by SendGrid is specified, the process should fail.
+			if slices.Contains(autoScopes, s.ValueString()) {
+				resp.Diagnostics.AddError(
+					"Creating teammate",
+					fmt.Sprintf(
+						"Unable to create teammate, got error: scopes automatically by SendGrid and cannot be manually assigned: %s",
+						strings.Join(autoScopes, ", "),
+					),
+				)
+				return
+			}
+			// If scopes are invalid, the process should fail.
+			if !slices.Contains(validScopes, s.ValueString()) {
+				resp.Diagnostics.AddError(
+					"Creating teammate",
+					fmt.Sprintf("Unable to create teammate, got error: scope '%s' is not valid", s.ValueString()),
+				)
+				return
+			}
 			scopes = append(scopes, s.ValueString())
 		}
+
 		input.Scopes = scopes
 	}
 
@@ -144,8 +443,13 @@ func (r *teammateResource) Create(ctx context.Context, req resource.CreateReques
 	}
 
 	scopes := []types.String{}
-	for _, s := range inviteTeammate.Scopes {
-		scopes = append(scopes, types.StringValue(s))
+	if !inviteTeammate.IsAdmin {
+		for _, s := range inviteTeammate.Scopes {
+			if slices.Contains(autoScopes, s) {
+				continue
+			}
+			scopes = append(scopes, types.StringValue(s))
+		}
 	}
 
 	// pending user does not have an username.
@@ -183,8 +487,14 @@ func (r *teammateResource) Read(ctx context.Context, req resource.ReadRequest, r
 	// If the teammate is in a pending state, return their data.
 	if pendingTeammate != nil {
 		scopes := []types.String{}
-		for _, s := range pendingTeammate.Scopes {
-			scopes = append(scopes, types.StringValue(s))
+		// administorators have all scopes, so we don't need to set them.
+		if !data.IsAdmin.ValueBool() {
+			for _, s := range pendingTeammate.Scopes {
+				if slices.Contains(autoScopes, s) {
+					continue
+				}
+				scopes = append(scopes, types.StringValue(s))
+			}
 		}
 		data = teammateResourceModel{
 			ID:    types.StringValue(pendingTeammate.Email),
@@ -230,8 +540,15 @@ func (r *teammateResource) Read(ctx context.Context, req resource.ReadRequest, r
 	}
 
 	scopes := []types.String{}
-	for _, s := range o.Scopes {
-		scopes = append(scopes, types.StringValue(s))
+	// admin users have all scopes, so we don't need to set them.
+	if !o.IsAdmin {
+		for _, s := range o.Scopes {
+			// Automatically assigned scopes in SendGrid are not managed.
+			if slices.Contains(autoScopes, s) {
+				continue
+			}
+			scopes = append(scopes, types.StringValue(s))
+		}
 	}
 
 	data = teammateResourceModel{
@@ -269,6 +586,10 @@ func (r *teammateResource) Update(ctx context.Context, req resource.UpdateReques
 
 	// If the teammate is in a pending state, it is not possible to update the permissions.
 	if pendingTeammate != nil {
+		scopes := []types.String{}
+		if !data.IsAdmin.ValueBool() {
+			scopes = data.Scopes
+		}
 		p := teammateResourceModel{
 			ID:    types.StringValue(pendingTeammate.Email),
 			Email: types.StringValue(pendingTeammate.Email),
@@ -280,7 +601,7 @@ func (r *teammateResource) Update(ctx context.Context, req resource.UpdateReques
 			//       While there might be differences from the actual code,
 			//       not accommodating the above would hinder team member management, making it unavoidable.
 			IsAdmin: data.IsAdmin,
-			Scopes:  data.Scopes,
+			Scopes:  scopes,
 		}
 		resp.Diagnostics.Append(resp.State.Set(ctx, &p)...)
 		return
@@ -290,8 +611,30 @@ func (r *teammateResource) Update(ctx context.Context, req resource.UpdateReques
 	username := state.Username.ValueString()
 
 	scopes := []string{}
-	for _, s := range data.Scopes {
-		scopes = append(scopes, s.ValueString())
+	if !data.IsAdmin.ValueBool() {
+		for _, s := range data.Scopes {
+			// If scopes automatically added by SendGrid is specified, the process should fail.
+			if slices.Contains(autoScopes, s.ValueString()) {
+				resp.Diagnostics.AddError(
+					"Updating teammate",
+					fmt.Sprintf(
+						"Unable to update teammate, got error: scopes automatically by SendGrid and cannot be manually assigned: %s",
+						strings.Join(autoScopes, ", "),
+					),
+				)
+				return
+			}
+			// If scopes are invalid, the process should fail.
+			if !slices.Contains(validScopes, s.ValueString()) {
+				resp.Diagnostics.AddError(
+					"Updating teammate",
+					fmt.Sprintf("Unable to update teammate, got error: scope '%s' is not valid", s.ValueString()),
+				)
+				return
+			}
+
+			scopes = append(scopes, s.ValueString())
+		}
 	}
 
 	o, err := r.client.UpdateTeammatePermissions(ctx, username, &sendgrid.InputUpdateTeammatePermissions{
@@ -307,8 +650,10 @@ func (r *teammateResource) Update(ctx context.Context, req resource.UpdateReques
 	}
 
 	scopesSet := []types.String{}
-	for _, s := range o.Scopes {
-		scopesSet = append(scopesSet, types.StringValue(s))
+	if !o.IsAdmin {
+		for _, s := range o.Scopes {
+			scopesSet = append(scopesSet, types.StringValue(s))
+		}
 	}
 
 	// Save updated data into Terraform state
@@ -434,8 +779,13 @@ func (r *teammateResource) ImportState(ctx context.Context, req resource.ImportS
 	// If the teammate is in a pending state, return their data.
 	if pendingTeammate != nil {
 		scopes := []types.String{}
-		for _, s := range pendingTeammate.Scopes {
-			scopes = append(scopes, types.StringValue(s))
+		if !pendingTeammate.IsAdmin {
+			for _, s := range pendingTeammate.Scopes {
+				if slices.Contains(autoScopes, s) {
+					continue
+				}
+				scopes = append(scopes, types.StringValue(s))
+			}
 		}
 		data = teammateResourceModel{
 			ID:      types.StringValue(email),
@@ -475,8 +825,14 @@ func (r *teammateResource) ImportState(ctx context.Context, req resource.ImportS
 	}
 
 	scopes := []types.String{}
-	for _, s := range teammate.Scopes {
-		scopes = append(scopes, types.StringValue(s))
+	if !teammate.IsAdmin {
+		for _, s := range teammate.Scopes {
+			// Automatically assigned scopes in SendGrid are not managed.
+			if slices.Contains(autoScopes, s) {
+				continue
+			}
+			scopes = append(scopes, types.StringValue(s))
+		}
 	}
 
 	data = teammateResourceModel{

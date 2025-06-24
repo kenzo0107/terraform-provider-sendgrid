@@ -5,6 +5,7 @@ package provider
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
@@ -22,7 +23,7 @@ func TestAccTeammateResource(t *testing.T) {
 		Steps: []resource.TestStep{
 			// Create and Read testing
 			{
-				Config: testAccTeammateResourceConfig(email, false),
+				Config: testAccTeammateResourceConfig(email, []string{"user.profile.read"}),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttrSet(resourceName, "id"),
 					resource.TestCheckResourceAttr(resourceName, "email", email),
@@ -36,26 +37,18 @@ func TestAccTeammateResource(t *testing.T) {
 				ImportState:       true,
 				ImportStateVerify: true,
 			},
-			// Update and Read testing
-			{
-				Config: testAccTeammateResourceConfig(email, true),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttrSet(resourceName, "id"),
-					resource.TestCheckResourceAttr(resourceName, "email", email),
-					resource.TestCheckResourceAttr(resourceName, "is_admin", "true"),
-					resource.TestCheckTypeSetElemAttr(resourceName, "scopes.*", "user.profile.read"),
-				),
-			},
 		},
 	})
 }
 
-func testAccTeammateResourceConfig(email string, is_admin bool) string {
+func testAccTeammateResourceConfig(email string, scopes []string) string {
+	for i, s := range scopes {
+		scopes[i] = `"` + s + `"`
+	}
 	return fmt.Sprintf(`
 resource "sendgrid_teammate" "test" {
 	email = "%s"
-	is_admin = %t
-	scopes = ["user.profile.read"]
+	scopes = [%s]
 }
-`, email, is_admin)
+`, email, strings.Join(scopes, ", "))
 }
