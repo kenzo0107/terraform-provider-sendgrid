@@ -19,19 +19,3 @@ func ExpandFrameworkStringSet(ctx context.Context, set types.Set) []string {
 
 	return vs
 }
-
-func ContainsAll(targets []string, items []string) bool {
-	// Convert items to a map for faster lookup
-	itemSet := make(map[string]bool)
-	for _, item := range items {
-		itemSet[item] = true
-	}
-
-	// Check if each target exists in the itemSet
-	for _, target := range targets {
-		if !itemSet[target] {
-			return false
-		}
-	}
-	return true
-}

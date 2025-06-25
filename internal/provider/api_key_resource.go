@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"slices"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -42,6 +43,17 @@ var defaultScopes = []string{
 	"2fa_required",
 }
 
+func excludeDefaultScopes(scopes []string) []string {
+	// Exclude default scopes from the provided scopes
+	filteredScopes := make([]string, 0, len(scopes))
+	for _, s := range scopes {
+		if !slices.Contains(defaultScopes, s) {
+			filteredScopes = append(filteredScopes, s)
+		}
+	}
+	return filteredScopes
+}
+
 func (r *apiKeyResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_api_key"
 }
@@ -65,9 +77,14 @@ For more detailed information, please see the [SendGrid documentation](https://d
 				Required:            true,
 			},
 			"scopes": schema.SetAttribute{
-				ElementType:         types.StringType,
-				MarkdownDescription: "The permissions API Key has access to",
-				Optional:            true,
+				ElementType: types.StringType,
+				MarkdownDescription: `The permissions API Key has access to.
+
+The following Scopes are set automatically by SendGrid, so they cannot be set manually:
+
+- ` + strings.Join(defaultScopes, "\n- ") + `
+`,
+				Optional: true,
 			},
 			"api_key": schema.StringAttribute{
 				MarkdownDescription: "API Key. NOTE: If imported, you cannot set the value of the API key. This is because the API key is issued only during the creation process.",
@@ -106,12 +123,18 @@ func (r *apiKeyResource) Create(ctx context.Context, req resource.CreateRequest,
 
 	scopes := flex.ExpandFrameworkStringSet(ctx, plan.Scopes)
 
-	if !flex.ContainsAll(defaultScopes, scopes) {
-		resp.Diagnostics.AddError(
-			"Creating api key",
-			fmt.Sprintf("Unable to create api key, got error: scopes must include default scopes: %s", strings.Join(defaultScopes, ", ")),
-		)
-		return
+	for _, s := range scopes {
+		if slices.Contains(defaultScopes, s) {
+			// If scopes automatically added by SendGrid is specified, the process should fail.
+			resp.Diagnostics.AddError(
+				"Creating API Key",
+				fmt.Sprintf(
+					"Unable to create API Key, got error: scopes automatically by SendGrid and cannot be manually assigned: %s",
+					strings.Join(defaultScopes, ", "),
+				),
+			)
+			return
+		}
 	}
 
 	// NOTE: Re-execute after the re-executable time has elapsed when a rate limit occurs
@@ -138,7 +161,7 @@ func (r *apiKeyResource) Create(ctx context.Context, req resource.CreateRequest,
 		return
 	}
 
-	scopesSet, d := types.SetValueFrom(ctx, types.StringType, o.Scopes)
+	scopesSet, d := types.SetValueFrom(ctx, types.StringType, excludeDefaultScopes(o.Scopes))
 	resp.Diagnostics.Append(d...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -179,7 +202,7 @@ func (r *apiKeyResource) Read(ctx context.Context, req resource.ReadRequest, res
 		return
 	}
 
-	scopes, d := types.SetValueFrom(ctx, types.StringType, o.Scopes)
+	scopes, d := types.SetValueFrom(ctx, types.StringType, excludeDefaultScopes(o.Scopes))
 	resp.Diagnostics.Append(d...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -204,24 +227,32 @@ func (r *apiKeyResource) Update(ctx context.Context, req resource.UpdateRequest,
 
 	id := state.ID.ValueString()
 
+	dataScopes := flex.ExpandFrameworkStringSet(ctx, data.Scopes)
+	for _, s := range dataScopes {
+		if slices.Contains(defaultScopes, s) {
+			// If scopes automatically added by SendGrid is specified, the process should fail.
+			resp.Diagnostics.AddError(
+				"Updateting API Key",
+				fmt.Sprintf(
+					"Unable to update API Key, got error: scopes automatically by SendGrid and cannot be manually assigned: %s",
+					strings.Join(defaultScopes, ", "),
+				),
+			)
+			return
+		}
+	}
+
 	var scopes []string
 	if !reflect.DeepEqual(data.Scopes, state.Scopes) {
 		scopes = flex.ExpandFrameworkStringSet(ctx, data.Scopes)
 	}
 
+	scopes = excludeDefaultScopes(scopes)
+
 	data.ID = types.StringValue(id)
 	data.APIKey = state.APIKey
 
 	if len(scopes) > 0 {
-		// check if scopes include default scopes
-		if !flex.ContainsAll(defaultScopes, scopes) {
-			resp.Diagnostics.AddError(
-				"Updating api key",
-				fmt.Sprintf("Unable to update api key, got error: scopes must include default scopes: %s", strings.Join(defaultScopes, ", ")),
-			)
-			return
-		}
-
 		// update name and scopes
 		o, err := r.client.UpdateAPIKeyNameAndScopes(ctx, id, &sendgrid.InputUpdateAPIKeyNameAndScopes{
 			Name:   data.Name.ValueString(),
@@ -298,7 +329,7 @@ func (r *apiKeyResource) ImportState(ctx context.Context, req resource.ImportSta
 		return
 	}
 
-	scopes, d := types.SetValueFrom(ctx, types.StringType, o.Scopes)
+	scopes, d := types.SetValueFrom(ctx, types.StringType, excludeDefaultScopes(o.Scopes))
 	resp.Diagnostics.Append(d...)
 	if resp.Diagnostics.HasError() {
 		return
