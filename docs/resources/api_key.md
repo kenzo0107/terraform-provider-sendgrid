@@ -23,9 +23,6 @@ resource "sendgrid_api_key" "example" {
   name = "dummy"
   scopes = [
     "user.profile.read",
-    "sender_verification_exempt",
-    "sender_verification_eligible",
-    "2fa_required",
   ]
 }
 ```
@@ -39,7 +36,13 @@ resource "sendgrid_api_key" "example" {
 
 ### Optional
 
-- `scopes` (Set of String) The permissions API Key has access to
+- `scopes` (Set of String) The permissions API Key has access to.
+
+The following Scopes are set automatically by SendGrid, so they cannot be set manually:
+
+- sender_verification_exempt
+- sender_verification_eligible
+- 2fa_required
 
 ### Read-Only
 
