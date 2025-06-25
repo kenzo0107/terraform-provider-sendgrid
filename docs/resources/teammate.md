@@ -23,11 +23,17 @@ resource "sendgrid_teammate" "example" {
   email = "dummy@example.com"
   scopes = [
     "user.profile.read",
+    "mail_settings.read",
+    "partner_settings.read",
+    "tracking_settings.read",
+    "user.account.read",
+    "user.credits.read",
+    "user.email.read",
+    "user.profile.update",
+    "user.settings.enforced_tls.read",
+    "user.timezone.read",
+    "user.username.read",
   ]
-
-  lifecycle {
-    ignore_changes = [scopes]
-  }
 }
 ```
 
@@ -41,9 +47,14 @@ resource "sendgrid_teammate" "example" {
 
 For more detailed information, please see the [SendGrid documentation](https://docs.sendgrid.com/ui/account-and-settings/teammate-permissions#persona-scopes)
 
-Note:
-Since scopes are automatically added after registering the usernames of invited teammates, there's a possibility that they might differ from the values defined in the Terraform code.
-As some scopes that cannot be defined are unclear, the current approach is to use ignore_changes to avoid modifications and instead set permissions on the dashboard, which is preferable.
+The following Scopes are set automatically by SendGrid, so they cannot be set manually:
+
+- 2fa_exempt
+- 2fa_required
+- sender_verification_exempt
+- sender_verification_eligible
+
+A teammate remains in a pending state until the invitation is accepted, during which scopes cannot be modified.
 
 ### Optional
 
