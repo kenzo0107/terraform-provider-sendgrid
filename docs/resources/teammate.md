@@ -47,14 +47,7 @@ resource "sendgrid_teammate" "example" {
 
 For more detailed information, please see the [SendGrid documentation](https://docs.sendgrid.com/ui/account-and-settings/teammate-permissions#persona-scopes)
 
-The following Scopes are set automatically by SendGrid, so they cannot be set manually:
-
-- 2fa_exempt
-- 2fa_required
-- sender_verification_exempt
-- sender_verification_eligible
-
-A teammate remains in a pending state until the invitation is accepted, during which scopes cannot be modified.
+The following Scopes are set automatically by SendGrid, so they cannot be set manually:`2fa_exempt`, `2fa_required`, `sender_verification_exempt`, `sender_verification_eligible`. A teammate remains in a pending state until the invitation is accepted, during which scopes cannot be modified.
 
 ### Optional
 

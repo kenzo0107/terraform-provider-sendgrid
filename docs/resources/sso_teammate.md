@@ -39,7 +39,7 @@ resource "sendgrid_sso_teammate" "example" {
 ### Optional
 
 - `is_admin` (Boolean) Set to true if teammate has admin privileges.
-- `scopes` (Set of String) Add or remove permissions from a Teammate using this scopes property. See [Teammate Permissions](https://www.twilio.com/docs/sendgrid/ui/account-and-settings/teammate-permissions) for a complete list of available scopes. You should not include this propety in the request when setting the `is_admin` property to `true` or `subuser_access` property to a list of subuser accesses.
+- `scopes` (Set of String) Add or remove permissions from a Teammate using this scopes property. See [Teammate Permissions](https://www.twilio.com/docs/sendgrid/ui/account-and-settings/teammate-permissions) for a complete list of available scopes. You should not include this propety in the request when setting the `is_admin` property to `true` or `subuser_access` property to a list of subuser accesses. The following Scopes are set automatically by SendGrid, so they cannot be set manually:`2fa_exempt`, `2fa_required`, `sender_verification_exempt`, `sender_verification_eligible`
 - `subuser_access` (Attributes List) Specify which Subusers the Teammate may access and act on behalf of. (see [below for nested schema](#nestedatt--subuser_access))
 
 ### Read-Only

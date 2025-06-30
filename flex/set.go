@@ -2,6 +2,8 @@ package flex
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
@@ -18,4 +20,12 @@ func ExpandFrameworkStringSet(ctx context.Context, set types.Set) []string {
 	}
 
 	return vs
+}
+
+func QuoteAndJoin(items []string) string {
+	var quoted []string
+	for _, v := range items {
+		quoted = append(quoted, fmt.Sprintf("`%s`", v))
+	}
+	return strings.Join(quoted, ", ")
 }
