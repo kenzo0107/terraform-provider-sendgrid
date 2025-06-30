@@ -15,6 +15,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/kenzo0107/sendgrid"
+	"github.com/kenzo0107/terraform-provider-sendgrid/flex"
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
@@ -346,14 +347,7 @@ The permissions API Key has access to.
 
 For more detailed information, please see the [SendGrid documentation](https://docs.sendgrid.com/ui/account-and-settings/teammate-permissions#persona-scopes)
 
-The following Scopes are set automatically by SendGrid, so they cannot be set manually:
-
-- 2fa_exempt
-- 2fa_required
-- sender_verification_exempt
-- sender_verification_eligible
-
-A teammate remains in a pending state until the invitation is accepted, during which scopes cannot be modified.
+The following Scopes are set automatically by SendGrid, so they cannot be set manually:` + flex.QuoteAndJoin(autoScopes) + `. A teammate remains in a pending state until the invitation is accepted, during which scopes cannot be modified.
 `,
 				Required: true,
 			},
@@ -387,38 +381,43 @@ func (r *teammateResource) Create(ctx context.Context, req resource.CreateReques
 		return
 	}
 
+	// adminitors have all scopes, so we don't need to set them.
+	if data.IsAdmin.ValueBool() && len(data.Scopes) > 0 {
+		resp.Diagnostics.AddError(
+			"Creating teammate",
+			"Unable to create teammate, scopes must be empty for administors",
+		)
+		return
+	}
+
+	var scopes []string
+	for _, s := range data.Scopes {
+		// If scopes automatically added by SendGrid is specified, the process should fail.
+		if slices.Contains(autoScopes, s.ValueString()) {
+			resp.Diagnostics.AddError(
+				"Creating teammate",
+				fmt.Sprintf(
+					"Unable to create teammate, got error: scopes automatically by SendGrid and cannot be manually assigned: %s",
+					strings.Join(autoScopes, ", "),
+				),
+			)
+			return
+		}
+		// If scopes are invalid, the process should fail.
+		if !slices.Contains(validScopes, s.ValueString()) {
+			resp.Diagnostics.AddError(
+				"Creating teammate",
+				fmt.Sprintf("Unable to create teammate, got error: scope '%s' is not valid", s.ValueString()),
+			)
+			return
+		}
+		scopes = append(scopes, s.ValueString())
+	}
+
 	input := &sendgrid.InputInviteTeammate{
 		Email:   data.Email.ValueString(),
 		IsAdmin: data.IsAdmin.ValueBool(),
-	}
-
-	// adminitors have all scopes, so we don't need to set them.
-	if !data.IsAdmin.ValueBool() {
-		var scopes []string
-		for _, s := range data.Scopes {
-			// If scopes automatically added by SendGrid is specified, the process should fail.
-			if slices.Contains(autoScopes, s.ValueString()) {
-				resp.Diagnostics.AddError(
-					"Creating teammate",
-					fmt.Sprintf(
-						"Unable to create teammate, got error: scopes automatically by SendGrid and cannot be manually assigned: %s",
-						strings.Join(autoScopes, ", "),
-					),
-				)
-				return
-			}
-			// If scopes are invalid, the process should fail.
-			if !slices.Contains(validScopes, s.ValueString()) {
-				resp.Diagnostics.AddError(
-					"Creating teammate",
-					fmt.Sprintf("Unable to create teammate, got error: scope '%s' is not valid", s.ValueString()),
-				)
-				return
-			}
-			scopes = append(scopes, s.ValueString())
-		}
-
-		input.Scopes = scopes
+		Scopes:  scopes,
 	}
 
 	// NOTE: Re-execute after the re-executable time has elapsed when a rate limit occurs
@@ -442,13 +441,13 @@ func (r *teammateResource) Create(ctx context.Context, req resource.CreateReques
 		return
 	}
 
-	scopes := []types.String{}
+	scopesSet := []types.String{}
 	if !inviteTeammate.IsAdmin {
 		for _, s := range inviteTeammate.Scopes {
 			if slices.Contains(autoScopes, s) {
 				continue
 			}
-			scopes = append(scopes, types.StringValue(s))
+			scopesSet = append(scopesSet, types.StringValue(s))
 		}
 	}
 
@@ -457,7 +456,7 @@ func (r *teammateResource) Create(ctx context.Context, req resource.CreateReques
 		ID:      types.StringValue(inviteTeammate.Email),
 		Email:   types.StringValue(inviteTeammate.Email),
 		IsAdmin: types.BoolValue(inviteTeammate.IsAdmin),
-		Scopes:  scopes,
+		Scopes:  scopesSet,
 	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -573,6 +572,15 @@ func (r *teammateResource) Update(ctx context.Context, req resource.UpdateReques
 		return
 	}
 
+	// adminitors have all scopes, so we don't need to set them.
+	if data.IsAdmin.ValueBool() && len(data.Scopes) > 0 {
+		resp.Diagnostics.AddError(
+			"Updating teammate",
+			"Unable to update teammate, scopes must be empty for administors",
+		)
+		return
+	}
+
 	email := data.Email.ValueString()
 
 	pendingTeammate, err := pendingTeammateByEmail(ctx, r.client, email)
@@ -611,30 +619,28 @@ func (r *teammateResource) Update(ctx context.Context, req resource.UpdateReques
 	username := state.Username.ValueString()
 
 	scopes := []string{}
-	if !data.IsAdmin.ValueBool() {
-		for _, s := range data.Scopes {
-			// If scopes automatically added by SendGrid is specified, the process should fail.
-			if slices.Contains(autoScopes, s.ValueString()) {
-				resp.Diagnostics.AddError(
-					"Updating teammate",
-					fmt.Sprintf(
-						"Unable to update teammate, got error: scopes automatically by SendGrid and cannot be manually assigned: %s",
-						strings.Join(autoScopes, ", "),
-					),
-				)
-				return
-			}
-			// If scopes are invalid, the process should fail.
-			if !slices.Contains(validScopes, s.ValueString()) {
-				resp.Diagnostics.AddError(
-					"Updating teammate",
-					fmt.Sprintf("Unable to update teammate, got error: scope '%s' is not valid", s.ValueString()),
-				)
-				return
-			}
-
-			scopes = append(scopes, s.ValueString())
+	for _, s := range data.Scopes {
+		// If scopes automatically added by SendGrid is specified, the process should fail.
+		if slices.Contains(autoScopes, s.ValueString()) {
+			resp.Diagnostics.AddError(
+				"Updating teammate",
+				fmt.Sprintf(
+					"Unable to update teammate, got error: scopes automatically by SendGrid and cannot be manually assigned: %s",
+					strings.Join(autoScopes, ", "),
+				),
+			)
+			return
 		}
+		// If scopes are invalid, the process should fail.
+		if !slices.Contains(validScopes, s.ValueString()) {
+			resp.Diagnostics.AddError(
+				"Updating teammate",
+				fmt.Sprintf("Unable to update teammate, got error: scope '%s' is not valid", s.ValueString()),
+			)
+			return
+		}
+
+		scopes = append(scopes, s.ValueString())
 	}
 
 	o, err := r.client.UpdateTeammatePermissions(ctx, username, &sendgrid.InputUpdateTeammatePermissions{
@@ -652,6 +658,10 @@ func (r *teammateResource) Update(ctx context.Context, req resource.UpdateReques
 	scopesSet := []types.String{}
 	if !o.IsAdmin {
 		for _, s := range o.Scopes {
+			// If scopes automatically added by SendGrid is specified, the process should fail.
+			if slices.Contains(autoScopes, s) {
+				continue
+			}
 			scopesSet = append(scopesSet, types.StringValue(s))
 		}
 	}

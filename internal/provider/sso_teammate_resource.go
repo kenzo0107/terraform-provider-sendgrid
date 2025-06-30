@@ -6,6 +6,8 @@ package provider
 import (
 	"context"
 	"fmt"
+	"slices"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/boolvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
@@ -20,6 +22,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/kenzo0107/sendgrid"
+	"github.com/kenzo0107/terraform-provider-sendgrid/flex"
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
@@ -173,7 +176,7 @@ For more detailed information, please see the [SendGrid documentation](https://d
 			},
 			"scopes": schema.SetAttribute{
 				ElementType:         types.StringType,
-				MarkdownDescription: "Add or remove permissions from a Teammate using this scopes property. See [Teammate Permissions](https://www.twilio.com/docs/sendgrid/ui/account-and-settings/teammate-permissions) for a complete list of available scopes. You should not include this propety in the request when setting the `is_admin` property to `true` or `subuser_access` property to a list of subuser accesses.",
+				MarkdownDescription: "Add or remove permissions from a Teammate using this scopes property. See [Teammate Permissions](https://www.twilio.com/docs/sendgrid/ui/account-and-settings/teammate-permissions) for a complete list of available scopes. You should not include this propety in the request when setting the `is_admin` property to `true` or `subuser_access` property to a list of subuser accesses. The following Scopes are set automatically by SendGrid, so they cannot be set manually:" + flex.QuoteAndJoin(autoScopes),
 				Optional:            true,
 				Validators: []validator.Set{
 					setvalidator.ConflictsWith(
@@ -250,6 +253,33 @@ func (r *ssoTeammateResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 
+	// adminitors have all scopes, so we don't need to set them.
+	if data.IsAdmin.ValueBool() && len(data.Scopes) > 0 {
+		resp.Diagnostics.AddError(
+			"Creating SSO teammate",
+			"Unable to create SSO teammate, scopes must be empty for administors",
+		)
+		return
+	}
+
+	var dataScopes []types.String
+	var scopes []string
+	for _, s := range data.Scopes {
+		// If scopes automatically added by SendGrid is specified, the process should fail.
+		if slices.Contains(autoScopes, s.ValueString()) {
+			resp.Diagnostics.AddError(
+				"Creating SSO teammate",
+				fmt.Sprintf(
+					"Unable to create SSO teammate, got error: scopes automatically by SendGrid and cannot be manually assigned: %s",
+					strings.Join(autoScopes, ", "),
+				),
+			)
+			return
+		}
+		scopes = append(scopes, s.ValueString())
+		dataScopes = append(dataScopes, s)
+	}
+
 	input := &sendgrid.InputCreateSSOTeammate{
 		Email:                      data.Email.ValueString(),
 		FirstName:                  data.FirstName.ValueString(),
@@ -257,15 +287,7 @@ func (r *ssoTeammateResource) Create(ctx context.Context, req resource.CreateReq
 		IsAdmin:                    data.IsAdmin.ValueBool(),
 		HasRestrictedSubuserAccess: len(data.SubuserAccess) > 0,
 		SubuserAccess:              toInputSubuserAccessArray(data.SubuserAccess),
-	}
-
-	if !data.IsAdmin.ValueBool() {
-		// Scopes are not required for admin users.
-		var scopes []string
-		for _, s := range data.Scopes {
-			scopes = append(scopes, s.ValueString())
-		}
-		input.Scopes = scopes
+		Scopes:                     scopes,
 	}
 
 	// NOTE: Re-execute after the re-executable time has elapsed when a rate limit occurs
@@ -301,10 +323,10 @@ func (r *ssoTeammateResource) Create(ctx context.Context, req resource.CreateReq
 		LastName:  types.StringValue(o.LastName),
 		Username:  types.StringValue(o.Email),
 
-		// NOTE: The teammate creation API returns an empty value for scopes,
+		// NOTE: The SSO teammate creation API returns an empty value for scopes,
 		//       causing a discrepancy with the scopes specified in the resource and resulting in an error.
 		//       To avoid this issue, we will adopt the specified scopes as-is.
-		Scopes:        data.Scopes,
+		Scopes:        dataScopes,
 		SubuserAccess: saArray,
 	}
 
@@ -349,8 +371,13 @@ func (r *ssoTeammateResource) Read(ctx context.Context, req resource.ReadRequest
 	}
 
 	scopes := []types.String{}
-	if !data.IsAdmin.ValueBool() {
+	// admin users have all scopes, so we don't need to set them.
+	if !o.IsAdmin {
 		for _, s := range o.Scopes {
+			// Automatically assigned scopes in SendGrid are not managed.
+			if slices.Contains(autoScopes, s) {
+				continue
+			}
 			scopes = append(scopes, types.StringValue(s))
 		}
 	}
@@ -392,19 +419,31 @@ func (r *ssoTeammateResource) Update(ctx context.Context, req resource.UpdateReq
 		return
 	}
 
-	email := data.Email.ValueString()
-
-	scopes := []string{}
-	for _, s := range data.Scopes {
-		scopes = append(scopes, s.ValueString())
-	}
-
-	if data.IsAdmin.ValueBool() && len(scopes) > 0 {
+	// adminitors have all scopes, so we don't need to set them.
+	if data.IsAdmin.ValueBool() && len(data.Scopes) > 0 {
 		resp.Diagnostics.AddError(
 			"Updating SSO teammate",
 			"Unable to update SSO teammate, scopes must be empty for administors",
 		)
 		return
+	}
+
+	email := data.Email.ValueString()
+
+	scopes := []string{}
+	for _, s := range data.Scopes {
+		// If scopes automatically added by SendGrid is specified, the process should fail.
+		if slices.Contains(autoScopes, s.ValueString()) {
+			resp.Diagnostics.AddError(
+				"Updating SSO teammate",
+				fmt.Sprintf(
+					"Unable to update SSO teammate, got error: scopes automatically by SendGrid and cannot be manually assigned: %s",
+					strings.Join(autoScopes, ", "),
+				),
+			)
+			return
+		}
+		scopes = append(scopes, s.ValueString())
 	}
 
 	o, err := r.client.UpdateSSOTeammate(ctx, email, &sendgrid.InputUpdateSSOTeammate{
@@ -425,6 +464,10 @@ func (r *ssoTeammateResource) Update(ctx context.Context, req resource.UpdateReq
 
 	scopesSet := []types.String{}
 	for _, s := range o.Scopes {
+		// If scopes automatically added by SendGrid is specified, the process should fail.
+		if slices.Contains(autoScopes, s) {
+			continue
+		}
 		scopesSet = append(scopesSet, types.StringValue(s))
 	}
 	saArray := fromOutputSubuserAccessArray(o.SubuserAccess)
@@ -516,6 +559,9 @@ func (r *ssoTeammateResource) ImportState(ctx context.Context, req resource.Impo
 
 	scopes := []types.String{}
 	for _, s := range teammate.Scopes {
+		if slices.Contains(autoScopes, s) {
+			continue
+		}
 		scopes = append(scopes, types.StringValue(s))
 	}
 	saArray := fromSendgridSubuserAccessArray(sa.SubuserAccess)
