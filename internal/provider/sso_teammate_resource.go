@@ -466,44 +466,15 @@ func (r *ssoTeammateResource) Delete(ctx context.Context, req resource.DeleteReq
 
 	email := data.Email.ValueString()
 
-	res, err := retryOnRateLimit(ctx, func() (interface{}, error) {
-		return getTeammateByEmail(ctx, r.client, email)
+	_, err := retryOnRateLimit(ctx, func() (interface{}, error) {
+		return nil, r.client.DeleteTeammate(ctx, email)
 	})
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Deleting SSO teammate",
-			fmt.Sprintf("Unable to get SSO teammates, got error: %s", err),
-		)
-		return
-	}
-
-	teammateByEmail, ok := res.(*sendgrid.Teammate)
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Deleting SSO teammate",
-			"Failed to assert type *sendgrid.Teammate",
-		)
-		return
-	}
-
-	if teammateByEmail == nil {
-		resp.Diagnostics.AddError(
-			"Deleting SSO teammate",
-			fmt.Sprintf("Not found SSO teammate (%s)", email),
-		)
-		return
-	}
-
-	_, err = retryOnRateLimit(ctx, func() (interface{}, error) {
-		return nil, r.client.DeleteTeammate(ctx, teammateByEmail.Username)
-	})
-
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Deleting SSO teammate",
 			fmt.Sprintf(
 				"Could not delete SSO teammate %s, unexpected error: %s",
-				teammateByEmail.Username,
+				email,
 				err,
 			),
 		)
@@ -518,24 +489,7 @@ func (r *ssoTeammateResource) ImportState(ctx context.Context, req resource.Impo
 
 	resource.ImportStatePassthroughID(ctx, path.Root("email"), req, resp)
 
-	teammateByEmail, err := getTeammateByEmail(ctx, r.client, email)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Importing SSO teammate",
-			fmt.Sprintf("Unable to read SSO teammate (%s), got error: %s", email, err),
-		)
-		return
-	}
-
-	if teammateByEmail == nil {
-		resp.Diagnostics.AddError(
-			"Importing SSO teammate",
-			fmt.Sprintf("Not found SSO teammate (%s)", email),
-		)
-		return
-	}
-
-	teammate, err := r.client.GetTeammate(ctx, teammateByEmail.Username)
+	teammate, err := r.client.GetTeammate(ctx, email)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Importing SSO teammate",
