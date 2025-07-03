@@ -53,6 +53,8 @@ The following Scopes are set automatically by SendGrid, so they cannot be set ma
 
 Import is supported using the following syntax:
 
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
+
 ```shell
 % terraform import sendgrid_api_key.example 1234567890AbCdEfGhIjkL
 ```

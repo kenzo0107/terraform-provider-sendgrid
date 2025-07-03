@@ -36,6 +36,8 @@ resource "sendgrid_enforce_tls" "example" {
 
 Import is supported using the following syntax:
 
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
+
 ```shell
 % terraform import sendgrid_enforce_tls.example ""
 ```
