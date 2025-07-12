@@ -43,6 +43,8 @@ type eventWebhookDataSourceModel struct {
 	OAuthClientID     types.String `tfsdk:"oauth_client_id"`
 	OAuthClientSecret types.String `tfsdk:"oauth_client_secret"`
 	OAuthTokenURL     types.String `tfsdk:"oauth_token_url"`
+	Signed            types.Bool   `tfsdk:"signed"`
+	PublicKey         types.String `tfsdk:"public_key"`
 }
 
 func (d *eventWebhookDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -147,6 +149,14 @@ Because the Event Webhook delivers data to your systems, it is also well-suited 
 				MarkdownDescription: "Set this property to the URL where SendGrid will send the OAuth client ID and client secret to generate an OAuth access token. This should be your OAuth server or service provider. When passing data in this field, you must also include the oauth_client_id property.",
 				Computed:            true,
 			},
+			"signed": schema.BoolAttribute{
+				MarkdownDescription: "Indicates whether signature verification is enabled for the Event Webhook. When enabled, SendGrid signs webhook payloads with a private key.",
+				Computed:            true,
+			},
+			"public_key": schema.StringAttribute{
+				MarkdownDescription: "The public key used to verify webhook signatures. This field is populated when signature verification is enabled.",
+				Computed:            true,
+			},
 		},
 	}
 }
@@ -171,7 +181,7 @@ func (d *eventWebhookDataSource) Read(ctx context.Context, req datasource.ReadRe
 		return
 	}
 
-	u := eventWebhookResourceModel{
+	u := eventWebhookDataSourceModel{
 		ID:               types.StringValue(o.ID),
 		Enabled:          types.BoolValue(o.Enabled),
 		URL:              types.StringValue(o.URL),
@@ -189,6 +199,8 @@ func (d *eventWebhookDataSource) Read(ctx context.Context, req datasource.ReadRe
 		FriendlyName:     types.StringValue(o.FriendlyName),
 		OAuthClientID:    types.StringValue(o.OAuthClientID),
 		OAuthTokenURL:    types.StringValue(o.OAuthTokenURL),
+		Signed:           types.BoolValue(o.PublicKey != ""),
+		PublicKey:        types.StringValue(o.PublicKey),
 	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &u)...)
