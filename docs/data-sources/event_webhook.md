@@ -43,6 +43,8 @@ data "sendgrid_event_webhook" "example" {
 - `oauth_token_url` (String) Set this property to the URL where SendGrid will send the OAuth client ID and client secret to generate an OAuth access token. This should be your OAuth server or service provider. When passing data in this field, you must also include the oauth_client_id property.
 - `open` (Boolean) Set this property to true to receive open events. Open events occur when a recipient has opened the HTML message. You must enable Open Tracking to receive this type of event.
 - `processed` (Boolean) Set this property to true to receive processed events. Processed events occur when a message has been received by Twilio SendGrid and the message is ready to be delivered.
+- `public_key` (String) The public key used to verify webhook signatures. This field is populated when signature verification is enabled.
+- `signed` (Boolean) Indicates whether signature verification is enabled for the Event Webhook. When enabled, SendGrid signs webhook payloads with a private key.
 - `spam_report` (Boolean) Set this property to true to receive spam report events. Spam reports occur when recipients mark a message as spam.
 - `unsubscribe` (Boolean) Set this property to true to receive unsubscribe events. Unsubscribes occur when recipients click on a message's subscription management link. You must enable Subscription Tracking to receive this type of event.
 - `url` (String) Set this property to the URL where you want the Event Webhook to send event data.

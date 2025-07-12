@@ -45,6 +45,8 @@ type eventWebhookResourceModel struct {
 	OAuthClientID     types.String `tfsdk:"oauth_client_id"`
 	OAuthClientSecret types.String `tfsdk:"oauth_client_secret"`
 	OAuthTokenURL     types.String `tfsdk:"oauth_token_url"`
+	Signed            types.Bool   `tfsdk:"signed"`
+	PublicKey         types.String `tfsdk:"public_key"`
 }
 
 func (r *eventWebhookResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -159,6 +161,16 @@ Because the Event Webhook delivers data to your systems, it is also well-suited 
 				Optional:            true,
 				Computed:            true,
 			},
+			"signed": schema.BoolAttribute{
+				MarkdownDescription: "Set this property to true to enable signature verification for the Event Webhook. When enabled, SendGrid will sign webhook payloads with a private key and include a signature in the request headers. (Default: `false`)",
+				Optional:            true,
+				Computed:            true,
+				Default:             booldefault.StaticBool(false),
+			},
+			"public_key": schema.StringAttribute{
+				MarkdownDescription: "The public key used to verify webhook signatures. This is automatically generated when signature verification is enabled and is read-only.",
+				Computed:            true,
+			},
 		},
 	}
 }
@@ -235,6 +247,36 @@ func (r *eventWebhookResource) Create(ctx context.Context, req resource.CreateRe
 		return
 	}
 
+	var publicKey string
+	signed := plan.Signed.ValueBool()
+
+	// Handle signature verification if enabled
+	if signed {
+		res, err := retryOnRateLimit(ctx, func() (interface{}, error) {
+			return r.client.ToggleSignatureVerification(ctx, o.ID, &sendgrid.InputToggleSignatureVerification{
+				Enabled: true,
+			})
+		})
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Enabling signature verification",
+				fmt.Sprintf("Unable to enable signature verification, got error: %s", err),
+			)
+			return
+		}
+
+		o, ok := res.(*sendgrid.OutputToggleSignatureVerification)
+		if !ok {
+			resp.Diagnostics.AddError(
+				"Enabling signature verification",
+				"Failed to assert type *sendgrid.OutputToggleSignatureVerification",
+			)
+			return
+		}
+
+		publicKey = o.PublicKey
+	}
+
 	plan = eventWebhookResourceModel{
 		ID:               types.StringValue(o.ID),
 		Enabled:          types.BoolValue(o.Enabled),
@@ -253,6 +295,8 @@ func (r *eventWebhookResource) Create(ctx context.Context, req resource.CreateRe
 		FriendlyName:     types.StringValue(o.FriendlyName),
 		OAuthClientID:    types.StringValue(o.OAuthClientID),
 		OAuthTokenURL:    types.StringValue(o.OAuthTokenURL),
+		Signed:           types.BoolValue(signed),
+		PublicKey:        types.StringValue(publicKey),
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 	if resp.Diagnostics.HasError() {
@@ -295,6 +339,8 @@ func (r *eventWebhookResource) Read(ctx context.Context, req resource.ReadReques
 		FriendlyName:     types.StringValue(o.FriendlyName),
 		OAuthClientID:    types.StringValue(o.OAuthClientID),
 		OAuthTokenURL:    types.StringValue(o.OAuthTokenURL),
+		Signed:           types.BoolValue(o.PublicKey != ""),
+		PublicKey:        types.StringValue(o.PublicKey),
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
@@ -346,6 +392,36 @@ func (r *eventWebhookResource) Update(ctx context.Context, req resource.UpdateRe
 		return
 	}
 
+	var publicKey string
+	signed := plan.Signed.ValueBool()
+
+	// Handle signature verification separately if it has changed
+	if !plan.Signed.Equal(state.Signed) {
+		res, err := retryOnRateLimit(ctx, func() (interface{}, error) {
+			return r.client.ToggleSignatureVerification(ctx, id, &sendgrid.InputToggleSignatureVerification{
+				Enabled: signed,
+			})
+		})
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Updating event webhook signature verification",
+				fmt.Sprintf("Unable to update signature verification, got error: %s", err),
+			)
+			return
+		}
+
+		o, ok := res.(*sendgrid.OutputToggleSignatureVerification)
+		if !ok {
+			resp.Diagnostics.AddError(
+				"Enabling signature verification",
+				"Failed to assert type *sendgrid.OutputToggleSignatureVerification",
+			)
+			return
+		}
+
+		publicKey = o.PublicKey
+	}
+
 	data := eventWebhookResourceModel{
 		ID:               types.StringValue(o.ID),
 		Enabled:          types.BoolValue(o.Enabled),
@@ -364,6 +440,8 @@ func (r *eventWebhookResource) Update(ctx context.Context, req resource.UpdateRe
 		FriendlyName:     types.StringValue(o.FriendlyName),
 		OAuthClientID:    types.StringValue(o.OAuthClientID),
 		OAuthTokenURL:    types.StringValue(o.OAuthTokenURL),
+		Signed:           types.BoolValue(signed),
+		PublicKey:        types.StringValue(publicKey),
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
@@ -420,6 +498,8 @@ func (r *eventWebhookResource) ImportState(ctx context.Context, req resource.Imp
 		FriendlyName:     types.StringValue(o.FriendlyName),
 		OAuthClientID:    types.StringValue(o.OAuthClientID),
 		OAuthTokenURL:    types.StringValue(o.OAuthTokenURL),
+		Signed:           types.BoolValue(o.PublicKey != ""),
+		PublicKey:        types.StringValue(o.PublicKey),
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &d)...)
 	if resp.Diagnostics.HasError() {

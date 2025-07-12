@@ -16,7 +16,14 @@ Because the Event Webhook delivers data to your systems, it is also well-suited 
 
 ```terraform
 resource "sendgrid_event_webhook" "example" {
-  url = "https://example.com"
+  url           = "https://example.com"
+  enabled       = true
+  signed        = true
+  delivered     = true
+  processed     = true
+  bounce        = true
+  dropped       = true
+  friendly_name = "Example Event Webhook"
 }
 ```
 
@@ -43,9 +50,11 @@ resource "sendgrid_event_webhook" "example" {
 - `oauth_token_url` (String) Set this property to the URL where SendGrid will send the OAuth client ID and client secret to generate an OAuth access token. This should be your OAuth server or service provider. When passing data in this field, you must also include the oauth_client_id property.
 - `open` (Boolean) Set this property to true to receive open events. Open events occur when a recipient has opened the HTML message. You must enable Open Tracking to receive this type of event. (Default: `false`)
 - `processed` (Boolean) Set this property to true to receive processed events. Processed events occur when a message has been received by Twilio SendGrid and the message is ready to be delivered. (Default: `false`)
+- `signed` (Boolean) Set this property to true to enable signature verification for the Event Webhook. When enabled, SendGrid will sign webhook payloads with a private key and include a signature in the request headers. (Default: `false`)
 - `spam_report` (Boolean) Set this property to true to receive spam report events. Spam reports occur when recipients mark a message as spam. (Default: `false`)
 - `unsubscribe` (Boolean) Set this property to true to receive unsubscribe events. Unsubscribes occur when recipients click on a message's subscription management link. You must enable Subscription Tracking to receive this type of event. (Default: `false`)
 
 ### Read-Only
 
 - `id` (String) The ID of Event Webhook
+- `public_key` (String) The public key used to verify webhook signatures. This is automatically generated when signature verification is enabled and is read-only.
