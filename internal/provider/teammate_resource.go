@@ -29,6 +29,12 @@ var autoScopes = []string{
 	"sender_verification_eligible",
 }
 
+// Scopes that cannot be assigned when inviting a teammate but can be added after invitation acceptance.
+var scopesBlockedDuringInvitation = []string{
+	"user.profile.update",
+	"user.password.update",
+}
+
 func newTeammateResource() resource.Resource {
 	return &teammateResource{}
 }
@@ -67,7 +73,7 @@ For more detailed information, please see the [SendGrid documentation](https://d
 				Required:            true,
 			},
 			"username": schema.StringAttribute{
-				MarkdownDescription: "Teammate's username",
+				MarkdownDescription: "Teammate's username. If the username you provide is already associated with an existing SendGrid account or teammate, the request will fail.",
 				Computed:            true,
 			},
 			"is_admin": schema.BoolAttribute{
@@ -84,6 +90,15 @@ The permissions API Key has access to.
 For more detailed information, please see the [SendGrid documentation](https://docs.sendgrid.com/ui/account-and-settings/teammate-permissions#persona-scopes)
 
 The following Scopes are set automatically by SendGrid, so they cannot be set manually:` + flex.QuoteAndJoin(autoScopes) + `. A teammate remains in a pending state until the invitation is accepted, during which scopes cannot be modified.
+
+**Important:** The following scopes cannot be assigned when inviting a teammate and will cause an error:` + flex.QuoteAndJoin(scopesBlockedDuringInvitation) + `
+
+These scopes can be added after the teammate accepts the invitation. To work around this limitation:
+1. First invite the teammate without these scopes
+2. After the teammate accepts the invitation, update their permissions to include these scopes
+
+Please note that SendGrid API behavior may change without notice.
+If you encounter any issues, feel free to report them via [issues](https://github.com/kenzo0107/terraform-provider-sendgrid/issues).
 `,
 				Required: true,
 			},
@@ -139,6 +154,19 @@ func (r *teammateResource) Create(ctx context.Context, req resource.CreateReques
 			)
 			return
 		}
+		// Check if this scope is blocked during invitation
+		if slices.Contains(scopesBlockedDuringInvitation, s.ValueString()) {
+			resp.Diagnostics.AddError(
+				"Creating teammate",
+				fmt.Sprintf(
+					"The scope '%s' cannot be assigned when inviting a teammate. These scopes can be added after the teammate accepts the invitation. Blocked scopes: %s",
+					s.ValueString(),
+					strings.Join(scopesBlockedDuringInvitation, ", "),
+				),
+			)
+			return
+		}
+
 		scopes = append(scopes, s.ValueString())
 	}
 

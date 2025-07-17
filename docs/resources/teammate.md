@@ -49,6 +49,15 @@ For more detailed information, please see the [SendGrid documentation](https://d
 
 The following Scopes are set automatically by SendGrid, so they cannot be set manually:`2fa_exempt`, `2fa_required`, `sender_verification_exempt`, `sender_verification_eligible`. A teammate remains in a pending state until the invitation is accepted, during which scopes cannot be modified.
 
+**Important:** The following scopes cannot be assigned when inviting a teammate and will cause an error:`user.profile.update`, `user.password.update`
+
+These scopes can be added after the teammate accepts the invitation. To work around this limitation:
+1. First invite the teammate without these scopes
+2. After the teammate accepts the invitation, update their permissions to include these scopes
+
+Please note that SendGrid API behavior may change without notice.
+If you encounter any issues, feel free to report them via [issues](https://github.com/kenzo0107/terraform-provider-sendgrid/issues).
+
 ### Optional
 
 - `is_admin` (Boolean) Set to true if teammate has admin privileges.
@@ -56,7 +65,7 @@ The following Scopes are set automatically by SendGrid, so they cannot be set ma
 ### Read-Only
 
 - `id` (String) The ID of this resource.
-- `username` (String) Teammate's username
+- `username` (String) Teammate's username. If the username you provide is already associated with an existing SendGrid account or teammate, the request will fail.
 
 ## Import
 
