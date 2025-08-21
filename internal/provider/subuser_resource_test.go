@@ -20,7 +20,7 @@ func TestAccSubuserResource(t *testing.T) {
 
 	username := fmt.Sprintf("test-acc-%s", acctest.RandString(16))
 	email := fmt.Sprintf("test-acc-%s@example.com", acctest.RandString(16))
-	password := fmt.Sprintf("test-acc-%s", acctest.RandString(16))
+	password := fmt.Sprintf("test-acc-12345-%s", acctest.RandString(16))
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
