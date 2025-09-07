@@ -176,13 +176,13 @@ func retryOnRateLimit(ctx context.Context, f func() (interface{}, error)) (resp 
 	maxRetries := 5
 	baseDelay := 1 * time.Second
 	maxDelay := 60 * time.Second
-	
+
 	for retry := 0; retry < maxRetries; retry++ {
 		resp, err = f()
 		if err == nil {
 			return resp, nil
 		}
-		
+
 		if rle, ok := err.(*sendgrid.RateLimitedError); ok {
 			var waitTime time.Duration
 			if rle.RetryAfter > 0 {
@@ -191,17 +191,17 @@ func retryOnRateLimit(ctx context.Context, f func() (interface{}, error)) (resp 
 			} else {
 				waitTime = baseDelay * (1 << uint(retry))
 			}
-			
+
 			if waitTime > maxDelay {
 				waitTime = maxDelay
 			}
-			
+
 			tflog.Info(ctx, "Rate limited, retrying", map[string]interface{}{
-				"retry_attempt":    retry + 1,
-				"max_retries":      maxRetries,
-				"wait_seconds":     waitTime.Seconds(),
+				"retry_attempt": retry + 1,
+				"max_retries":   maxRetries,
+				"wait_seconds":  waitTime.Seconds(),
 			})
-			
+
 			select {
 			case <-ctx.Done():
 				return nil, ctx.Err()
@@ -209,9 +209,9 @@ func retryOnRateLimit(ctx context.Context, f func() (interface{}, error)) (resp 
 				continue
 			}
 		}
-		
+
 		return resp, err
 	}
-	
+
 	return resp, err
 }
