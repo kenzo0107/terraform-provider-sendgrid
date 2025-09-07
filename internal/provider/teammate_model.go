@@ -27,31 +27,31 @@ func pendingTeammateByEmail(ctx context.Context, client *sendgrid.Client, email 
 func getTeammateByEmail(ctx context.Context, client *sendgrid.Client, email string) (*sendgrid.Teammate, error) {
 	offset := 0
 	limit := 50
-	
+
 	for {
 		input := &sendgrid.InputGetTeammates{
 			Limit:  limit,
 			Offset: offset,
 		}
-		
+
 		r, err := client.GetTeammates(ctx, input)
 		if err != nil {
 			return nil, err
 		}
-		
+
 		for _, t := range r.Teammates {
 			t := &t
 			if email == t.Email {
 				return t, nil
 			}
 		}
-		
+
 		if len(r.Teammates) < limit {
 			break
 		}
-		
+
 		offset += limit
 	}
-	
+
 	return nil, nil
 }
