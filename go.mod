@@ -12,6 +12,8 @@ require (
 	github.com/kenzo0107/sendgrid v1.7.0
 )
 
+replace github.com/kenzo0107/sendgrid => ../sendgrid
+
 require (
 	github.com/BurntSushi/toml v1.2.1 // indirect
 	github.com/Kunde21/markdownfmt/v3 v3.1.0 // indirect

@@ -6,7 +6,6 @@ package provider
 import (
 	"context"
 	"fmt"
-	"os"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -24,8 +23,7 @@ func newBounceSettingsResource() resource.Resource {
 }
 
 type bounceSettingsResource struct {
-	client         *sendgrid.Client
-	extendedClient ClientWithBounceSettings
+	client *sendgrid.Client
 }
 
 type bounceSettingsResourceModel struct {
@@ -77,18 +75,6 @@ func (r *bounceSettingsResource) Configure(ctx context.Context, req resource.Con
 	}
 
 	r.client = client
-
-	// Get API key from environment for extended functionality
-	apiKey := os.Getenv("SENDGRID_API_KEY")
-	if apiKey == "" {
-		resp.Diagnostics.AddError(
-			"Missing SendGrid API Key",
-			"The bounce settings resource requires the SENDGRID_API_KEY environment variable to be set.",
-		)
-		return
-	}
-
-	r.extendedClient = ExtendClient(client, apiKey)
 }
 
 func (r *bounceSettingsResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -108,12 +94,12 @@ func (r *bounceSettingsResource) Create(ctx context.Context, req resource.Create
 		return
 	}
 
-	input := &InputUpdateBounceSettings{
+	input := &sendgrid.InputUpdateBounceSettings{
 		SoftBouncePurgeDays: plan.SoftBouncePurgeDays.ValueInt64(),
 	}
 
 	res, err := retryOnRateLimit(ctx, func() (interface{}, error) {
-		return r.extendedClient.UpdateBounceSettings(ctx, input)
+		return r.client.UpdateBounceSettings(ctx, input)
 	})
 	if err != nil {
 		resp.Diagnostics.AddError(
@@ -123,11 +109,11 @@ func (r *bounceSettingsResource) Create(ctx context.Context, req resource.Create
 		return
 	}
 
-	o, ok := res.(*OutputUpdateBounceSettings)
+	o, ok := res.(*sendgrid.BounceSettings)
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Creating bounce settings",
-			"Failed to assert type *OutputUpdateBounceSettings",
+			"Failed to assert type *sendgrid.BounceSettings",
 		)
 		return
 	}
@@ -149,7 +135,7 @@ func (r *bounceSettingsResource) Read(ctx context.Context, req resource.ReadRequ
 	}
 
 	res, err := retryOnRateLimit(ctx, func() (interface{}, error) {
-		return r.extendedClient.GetBounceSettings(ctx)
+		return r.client.GetBounceSettings(ctx)
 	})
 	if err != nil {
 		resp.Diagnostics.AddError(
@@ -159,11 +145,11 @@ func (r *bounceSettingsResource) Read(ctx context.Context, req resource.ReadRequ
 		return
 	}
 
-	o, ok := res.(*OutputGetBounceSettings)
+	o, ok := res.(*sendgrid.BounceSettings)
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Reading bounce settings",
-			"Failed to assert type *OutputGetBounceSettings",
+			"Failed to assert type *sendgrid.BounceSettings",
 		)
 		return
 	}
@@ -195,13 +181,13 @@ func (r *bounceSettingsResource) Update(ctx context.Context, req resource.Update
 		return
 	}
 
-	input := &InputUpdateBounceSettings{}
+	input := &sendgrid.InputUpdateBounceSettings{}
 	if !data.SoftBouncePurgeDays.IsNull() && data.SoftBouncePurgeDays.ValueInt64() != state.SoftBouncePurgeDays.ValueInt64() {
 		input.SoftBouncePurgeDays = data.SoftBouncePurgeDays.ValueInt64()
 	}
 
 	res, err := retryOnRateLimit(ctx, func() (interface{}, error) {
-		return r.extendedClient.UpdateBounceSettings(ctx, input)
+		return r.client.UpdateBounceSettings(ctx, input)
 	})
 	if err != nil {
 		resp.Diagnostics.AddError(
@@ -211,11 +197,11 @@ func (r *bounceSettingsResource) Update(ctx context.Context, req resource.Update
 		return
 	}
 
-	o, ok := res.(*OutputUpdateBounceSettings)
+	o, ok := res.(*sendgrid.BounceSettings)
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Updating bounce settings",
-			"Failed to assert type *OutputUpdateBounceSettings",
+			"Failed to assert type *sendgrid.BounceSettings",
 		)
 		return
 	}
@@ -238,12 +224,12 @@ func (r *bounceSettingsResource) Delete(ctx context.Context, req resource.Delete
 
 	// For bounce settings, we can't really "delete" them, but we can reset to a reasonable default
 	// Let's reset to 7 days as a default value
-	input := &InputUpdateBounceSettings{
+	input := &sendgrid.InputUpdateBounceSettings{
 		SoftBouncePurgeDays: 7,
 	}
 
 	_, err := retryOnRateLimit(ctx, func() (interface{}, error) {
-		return r.extendedClient.UpdateBounceSettings(ctx, input)
+		return r.client.UpdateBounceSettings(ctx, input)
 	})
 	if err != nil {
 		resp.Diagnostics.AddError(
@@ -258,7 +244,7 @@ func (r *bounceSettingsResource) ImportState(ctx context.Context, req resource.I
 	var data bounceSettingsResourceModel
 
 	res, err := retryOnRateLimit(ctx, func() (interface{}, error) {
-		return r.extendedClient.GetBounceSettings(ctx)
+		return r.client.GetBounceSettings(ctx)
 	})
 	if err != nil {
 		resp.Diagnostics.AddError(
@@ -268,11 +254,11 @@ func (r *bounceSettingsResource) ImportState(ctx context.Context, req resource.I
 		return
 	}
 
-	o, ok := res.(*OutputGetBounceSettings)
+	o, ok := res.(*sendgrid.BounceSettings)
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Importing bounce settings",
-			"Failed to assert type *OutputGetBounceSettings",
+			"Failed to assert type *sendgrid.BounceSettings",
 		)
 		return
 	}

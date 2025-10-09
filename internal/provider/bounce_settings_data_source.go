@@ -6,7 +6,6 @@ package provider
 import (
 	"context"
 	"fmt"
-	"os"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
@@ -25,8 +24,7 @@ func newBounceSettingsDataSource() datasource.DataSource {
 }
 
 type bounceSettingsDataSource struct {
-	client         *sendgrid.Client
-	extendedClient ClientWithBounceSettings
+	client *sendgrid.Client
 }
 
 type bounceSettingsDataSourceModel struct {
@@ -53,18 +51,6 @@ func (d *bounceSettingsDataSource) Configure(ctx context.Context, req datasource
 	}
 
 	d.client = client
-
-	// Get API key from environment for extended functionality
-	apiKey := os.Getenv("SENDGRID_API_KEY")
-	if apiKey == "" {
-		resp.Diagnostics.AddError(
-			"Missing SendGrid API Key",
-			"The bounce settings data source requires the SENDGRID_API_KEY environment variable to be set.",
-		)
-		return
-	}
-
-	d.extendedClient = ExtendClient(client, apiKey)
 }
 
 func (d *bounceSettingsDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
@@ -98,7 +84,7 @@ func (d *bounceSettingsDataSource) Read(ctx context.Context, req datasource.Read
 	}
 
 	res, err := retryOnRateLimit(ctx, func() (interface{}, error) {
-		return d.extendedClient.GetBounceSettings(ctx)
+		return d.client.GetBounceSettings(ctx)
 	})
 	if err != nil {
 		resp.Diagnostics.AddError(
@@ -108,11 +94,11 @@ func (d *bounceSettingsDataSource) Read(ctx context.Context, req datasource.Read
 		return
 	}
 
-	o, ok := res.(*OutputGetBounceSettings)
+	o, ok := res.(*sendgrid.BounceSettings)
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Reading bounce settings",
-			"Failed to assert type *OutputGetBounceSettings",
+			"Failed to assert type *sendgrid.BounceSettings",
 		)
 		return
 	}
