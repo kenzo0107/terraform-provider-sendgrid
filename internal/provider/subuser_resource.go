@@ -7,11 +7,15 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/kenzo0107/sendgrid"
 	"github.com/kenzo0107/terraform-provider-sendgrid/flex"
@@ -30,11 +34,13 @@ type subuserResource struct {
 }
 
 type subuserResourceModel struct {
-	ID       types.Int64  `tfsdk:"id"`
-	Username types.String `tfsdk:"username"`
-	Email    types.String `tfsdk:"email"`
-	Password types.String `tfsdk:"password"`
-	Ips      types.Set    `tfsdk:"ips"`
+	ID                types.Int64  `tfsdk:"id"`
+	Username          types.String `tfsdk:"username"`
+	Email             types.String `tfsdk:"email"`
+	Password          types.String `tfsdk:"password"`
+	PasswordWO        types.String `tfsdk:"password_wo"`
+	PasswordWOVersion types.Int64  `tfsdk:"password_wo_version"`
+	Ips               types.Set    `tfsdk:"ips"`
 }
 
 func (r *subuserResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -71,10 +77,38 @@ For more detailed information, please see the [SendGrid documentation](https://d
 			},
 			"password": schema.StringAttribute{
 				MarkdownDescription: "The password of the subuser. NOTE: The password will only be saved in the tfstate during the execution of the creation.",
-				Required:            true,
+				Optional:            true,
 				Sensitive:           true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
+				},
+				Validators: []validator.String{
+					stringvalidator.ConflictsWith(path.MatchRoot("password_wo")),
+					stringvalidator.ExactlyOneOf(path.MatchRoot("password"), path.MatchRoot("password_wo")),
+				},
+			},
+			"password_wo": schema.StringAttribute{
+				MarkdownDescription: "The write-only password of the subuser. NOTE: password_wo is write-only and cannot be saved in the tfstate.",
+				Optional:            true,
+				Sensitive:           true,
+				WriteOnly:           true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+				Validators: []validator.String{
+					stringvalidator.ConflictsWith(path.MatchRoot("password")),
+					stringvalidator.ExactlyOneOf(path.MatchRoot("password"), path.MatchRoot("password_wo")),
+					stringvalidator.AlsoRequires(path.MatchRoot("password_wo_version")),
+				},
+			},
+			"password_wo_version": schema.Int64Attribute{
+				MarkdownDescription: "The version of the write-only password of the subuser. Change this value to rotate the write-only password. `Important` The SendGrid API currently does not support updating subuser passwords. To change a password, the subuser must be recreated.",
+				Optional:            true,
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.RequiresReplace(),
+				},
+				Validators: []validator.Int64{
+					int64validator.AlsoRequires(path.MatchRoot("password_wo")),
 				},
 			},
 			"ips": schema.SetAttribute{
@@ -112,14 +146,28 @@ func (r *subuserResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 
+	var config subuserResourceModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	ips := flex.ExpandFrameworkStringSet(ctx, plan.Ips)
+
+	var password string
+	if !plan.Password.IsNull() {
+		password = plan.Password.ValueString()
+	}
+	if !config.PasswordWO.IsNull() {
+		password = config.PasswordWO.ValueString()
+	}
 
 	// NOTE: Re-execute after the re-executable time has elapsed when a rate limit occurs
 	res, err := retryOnRateLimit(ctx, func() (interface{}, error) {
 		return r.client.CreateSubuser(ctx, &sendgrid.InputCreateSubuser{
 			Username: plan.Username.ValueString(),
 			Email:    plan.Email.ValueString(),
-			Password: plan.Password.ValueString(),
+			Password: password,
 			Ips:      ips,
 		})
 	})
@@ -140,10 +188,15 @@ func (r *subuserResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 
-	plan.ID = types.Int64Value(o.UserID)
-	plan.Username = types.StringValue(o.Username)
-	plan.Email = types.StringValue(o.Email)
-	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+	data := subuserResourceModel{
+		ID:                types.Int64Value(o.UserID),
+		Username:          types.StringValue(o.Username),
+		Email:             types.StringValue(o.Email),
+		Password:          plan.Password,
+		PasswordWOVersion: plan.PasswordWOVersion,
+		Ips:               plan.Ips,
+	}
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -275,6 +328,7 @@ func (r *subuserResource) ImportState(ctx context.Context, req resource.ImportSt
 		// NOTE: set ips to null because sendgrid api cannot get ips associated with subuser
 		Ips: types.SetNull(types.StringType),
 	}
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return

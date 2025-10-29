@@ -20,10 +20,11 @@ For more detailed information, please see the [SendGrid documentation](https://d
 
 ```terraform
 resource "sendgrid_subuser" "example" {
-  username = "dummy"
-  email    = "dummy@example.com"
-  password = "dummy"
-  ips      = ["1.1.1.2"]
+  username            = "dummy"
+  email               = "dummy@example.com"
+  password_wo         = "dummydummy1!"
+  password_wo_version = 1
+  ips                 = ["1.1.1.2"]
 }
 ```
 
@@ -34,8 +35,15 @@ resource "sendgrid_subuser" "example" {
 
 - `email` (String) The email of the subuser.
 - `ips` (Set of String) The IP addresses that should be assigned to this subuser.
-- `password` (String, Sensitive) The password of the subuser. NOTE: The password will only be saved in the tfstate during the execution of the creation.
 - `username` (String) The username of the subuser.
+
+### Optional
+
+> **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
+
+- `password` (String, Sensitive) The password of the subuser. NOTE: The password will only be saved in the tfstate during the execution of the creation.
+- `password_wo` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) The write-only password of the subuser. NOTE: password_wo is write-only and cannot be saved in the tfstate.
+- `password_wo_version` (Number) The version of the write-only password of the subuser. Change this value to rotate the write-only password. `Important` The SendGrid API currently does not support updating subuser passwords. To change a password, the subuser must be recreated.
 
 ### Read-Only
 
