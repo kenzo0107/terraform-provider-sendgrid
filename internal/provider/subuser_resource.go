@@ -211,10 +211,7 @@ func (r *subuserResource) Read(ctx context.Context, req resource.ReadRequest, re
 
 	username := state.Username.ValueString()
 
-	subusers, err := r.client.GetSubusers(ctx, &sendgrid.InputGetSubusers{
-		Username: username,
-		Limit:    1,
-	})
+	subuser, err := r.client.GetSubuser(ctx, username)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Reading subuser",
@@ -223,19 +220,10 @@ func (r *subuserResource) Read(ctx context.Context, req resource.ReadRequest, re
 		return
 	}
 
-	if len(subusers) == 0 {
-		resp.Diagnostics.AddError(
-			"Reading subuser",
-			fmt.Sprintf("Unable to read subuser (username: %s)", username),
-		)
-		return
-	}
-
 	if state.Ips.IsNull() {
 		state.Ips = types.SetNull(types.StringType)
 	}
 
-	subuser := subusers[0]
 	state.ID = types.Int64Value(subuser.ID)
 	state.Email = types.StringValue(subuser.Email)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
@@ -299,10 +287,7 @@ func (r *subuserResource) ImportState(ctx context.Context, req resource.ImportSt
 
 	resource.ImportStatePassthroughID(ctx, path.Root("username"), req, resp)
 
-	subusers, err := r.client.GetSubusers(ctx, &sendgrid.InputGetSubusers{
-		Username: username,
-		Limit:    1,
-	})
+	subuser, err := r.client.GetSubuser(ctx, username)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Importing subuser",
@@ -310,16 +295,6 @@ func (r *subuserResource) ImportState(ctx context.Context, req resource.ImportSt
 		)
 		return
 	}
-
-	if len(subusers) == 0 {
-		resp.Diagnostics.AddError(
-			"Importing subuser",
-			fmt.Sprintf("Unable to read subuser (username: %s)", username),
-		)
-		return
-	}
-
-	subuser := subusers[0]
 
 	data = subuserResourceModel{
 		ID:       types.Int64Value(subuser.ID),

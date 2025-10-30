@@ -89,10 +89,7 @@ func (d *subuserDataSource) Read(ctx context.Context, req datasource.ReadRequest
 
 	username := s.Username.ValueString()
 
-	subusers, err := d.client.GetSubusers(ctx, &sendgrid.InputGetSubusers{
-		Username: username,
-		Limit:    1,
-	})
+	subuser, err := d.client.GetSubuser(ctx, username)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Reading subuser",
@@ -100,16 +97,6 @@ func (d *subuserDataSource) Read(ctx context.Context, req datasource.ReadRequest
 		)
 		return
 	}
-
-	if len(subusers) == 0 {
-		resp.Diagnostics.AddError(
-			"Reading subuser",
-			fmt.Sprintf("Unable to read subuser (username: %s)", username),
-		)
-		return
-	}
-
-	subuser := subusers[0]
 
 	s = subuserDataSourceModel{
 		ID:       types.Int64Value(subuser.ID),
