@@ -44,6 +44,7 @@ resource "sendgrid_subuser" "example" {
 - `password` (String, Sensitive) The password of the subuser. NOTE: The password will only be saved in the tfstate during the execution of the creation.
 - `password_wo` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) The write-only password of the subuser. NOTE: password_wo is write-only and cannot be saved in the tfstate.
 - `password_wo_version` (Number) The version of the write-only password of the subuser. Change this value to rotate the write-only password. `Important` The SendGrid API currently does not support updating subuser passwords. To change a password, the subuser must be recreated.
+- `region` (String) The region where the subuser is created. This attribute is for informational purposes only.
 
 ### Read-Only
 

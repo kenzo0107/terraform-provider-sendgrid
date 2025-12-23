@@ -14,6 +14,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -41,6 +42,7 @@ type subuserResourceModel struct {
 	PasswordWO        types.String `tfsdk:"password_wo"`
 	PasswordWOVersion types.Int64  `tfsdk:"password_wo_version"`
 	Ips               types.Set    `tfsdk:"ips"`
+	Region            types.String `tfsdk:"region"`
 }
 
 func (r *subuserResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -116,6 +118,21 @@ For more detailed information, please see the [SendGrid documentation](https://d
 				ElementType:         types.StringType,
 				Required:            true,
 			},
+			"region": schema.StringAttribute{
+				MarkdownDescription: "The region where the subuser is created. This attribute is for informational purposes only.",
+				Computed:            true,
+				Optional:            true,
+				Default:             stringdefault.StaticString("global"),
+				Validators: []validator.String{
+					stringOneOf(
+						"global",
+						"eu",
+					),
+				},
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+			},
 		},
 	}
 }
@@ -165,10 +182,12 @@ func (r *subuserResource) Create(ctx context.Context, req resource.CreateRequest
 	// NOTE: Re-execute after the re-executable time has elapsed when a rate limit occurs
 	res, err := retryOnRateLimit(ctx, func() (interface{}, error) {
 		return r.client.CreateSubuser(ctx, &sendgrid.InputCreateSubuser{
-			Username: plan.Username.ValueString(),
-			Email:    plan.Email.ValueString(),
-			Password: password,
-			Ips:      ips,
+			Username:      plan.Username.ValueString(),
+			Email:         plan.Email.ValueString(),
+			Password:      password,
+			Ips:           ips,
+			Region:        plan.Region.ValueString(),
+			IncludeRegion: true,
 		})
 	})
 	if err != nil {
@@ -195,6 +214,7 @@ func (r *subuserResource) Create(ctx context.Context, req resource.CreateRequest
 		Password:          plan.Password,
 		PasswordWOVersion: plan.PasswordWOVersion,
 		Ips:               plan.Ips,
+		Region:            types.StringValue(o.Region),
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
@@ -211,11 +231,23 @@ func (r *subuserResource) Read(ctx context.Context, req resource.ReadRequest, re
 
 	username := state.Username.ValueString()
 
-	subuser, err := r.client.GetSubuser(ctx, username)
+	subusers, err := r.client.GetSubusers(ctx, &sendgrid.InputGetSubusers{
+		Username:      username,
+		Limit:         1,
+		Offset:        0,
+		IncludeRegion: true,
+	})
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Reading subuser",
 			fmt.Sprintf("Unable to read subuser (username: %s), got error: %s", username, err),
+		)
+		return
+	}
+	if len(subusers) == 0 {
+		resp.Diagnostics.AddError(
+			"Importing subuser",
+			fmt.Sprintf("Not found subuser, username: %s", username),
 		)
 		return
 	}
@@ -224,8 +256,10 @@ func (r *subuserResource) Read(ctx context.Context, req resource.ReadRequest, re
 		state.Ips = types.SetNull(types.StringType)
 	}
 
+	subuser := subusers[0]
 	state.ID = types.Int64Value(subuser.ID)
 	state.Email = types.StringValue(subuser.Email)
+	state.Region = types.StringValue(subuser.Region)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -287,7 +321,12 @@ func (r *subuserResource) ImportState(ctx context.Context, req resource.ImportSt
 
 	resource.ImportStatePassthroughID(ctx, path.Root("username"), req, resp)
 
-	subuser, err := r.client.GetSubuser(ctx, username)
+	subusers, err := r.client.GetSubusers(ctx, &sendgrid.InputGetSubusers{
+		Username:      username,
+		Limit:         1,
+		Offset:        0,
+		IncludeRegion: true,
+	})
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Importing subuser",
@@ -295,13 +334,22 @@ func (r *subuserResource) ImportState(ctx context.Context, req resource.ImportSt
 		)
 		return
 	}
+	if len(subusers) == 0 {
+		resp.Diagnostics.AddError(
+			"Importing subuser",
+			fmt.Sprintf("Not found subuser, username: %s", username),
+		)
+		return
+	}
 
+	subuser := subusers[0]
 	data = subuserResourceModel{
 		ID:       types.Int64Value(subuser.ID),
 		Username: types.StringValue(subuser.Username),
 		Email:    types.StringValue(subuser.Email),
 		// NOTE: set ips to null because sendgrid api cannot get ips associated with subuser
-		Ips: types.SetNull(types.StringType),
+		Ips:    types.SetNull(types.StringType),
+		Region: types.StringValue(subuser.Region),
 	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
