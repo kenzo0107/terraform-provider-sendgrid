@@ -140,6 +140,7 @@ func (p *sendgridProvider) Resources(ctx context.Context) []func() resource.Reso
 		newClickTrackingSettingsResource,
 		newBounceSettingsResource,
 		newAlertResource,
+		newDesignResource,
 	}
 }
 
@@ -163,6 +164,7 @@ func (p *sendgridProvider) DataSources(ctx context.Context) []func() datasource.
 		newClickTrackingSettingsDataSource,
 		newBounceSettingsDataSource,
 		newAlertDataSource,
+		newDesignDataSource,
 	}
 }
 

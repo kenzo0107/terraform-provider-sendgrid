@@ -20,6 +20,10 @@ func TestAccEventWebhookDataSource(t *testing.T) {
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
+			// Create resource first
+			{
+				Config: testEventWebhookResourceConfig(url),
+			},
 			// Read testing
 			{
 				Config: testEventWebhookDataSourceConfig(url),
@@ -29,6 +33,15 @@ func TestAccEventWebhookDataSource(t *testing.T) {
 			},
 		},
 	})
+}
+
+func testEventWebhookResourceConfig(url string) string {
+	return fmt.Sprintf(`
+resource "sendgrid_event_webhook" "test" {
+	url = "%s"
+	enabled = false
+}
+`, url)
 }
 
 func testEventWebhookDataSourceConfig(url string) string {
