@@ -141,6 +141,7 @@ func (p *sendgridProvider) Resources(ctx context.Context) []func() resource.Reso
 		newBounceSettingsResource,
 		newAlertResource,
 		newDesignResource,
+		newIPPoolResource,
 	}
 }
 
@@ -165,6 +166,7 @@ func (p *sendgridProvider) DataSources(ctx context.Context) []func() datasource.
 		newBounceSettingsDataSource,
 		newAlertDataSource,
 		newDesignDataSource,
+		newIPPoolDataSource,
 	}
 }
 
