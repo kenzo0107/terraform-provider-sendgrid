@@ -39,6 +39,7 @@ type senderAuthenticationResourceModel struct {
 	Domain             types.String `tfsdk:"domain"`
 	Subdomain          types.String `tfsdk:"subdomain"`
 	Username           types.String `tfsdk:"username"`
+	Region             types.String `tfsdk:"region"`
 	IPs                types.Set    `tfsdk:"ips"`
 	Default            types.Bool   `tfsdk:"default"`
 	Legacy             types.Bool   `tfsdk:"legacy"`
@@ -87,6 +88,14 @@ For more detailed information, please see the [SendGrid documentation](https://d
 			"username": schema.StringAttribute{
 				MarkdownDescription: "The username associated with this domain.",
 				Computed:            true,
+			},
+			"region": schema.StringAttribute{
+				MarkdownDescription: "The region of the domain. Allowed values are 'global' or 'eu'.",
+				Optional:            true,
+				Computed:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
 			},
 			"ips": schema.SetAttribute{
 				ElementType:         types.StringType,
@@ -184,6 +193,10 @@ func (r *senderAuthenticationResource) Create(ctx context.Context, req resource.
 	if len(ips) > 0 {
 		input.IPs = ips
 	}
+	region := data.Region.ValueString()
+	if region != "" {
+		input.Region = region
+	}
 	def := data.Default.ValueBool()
 	if def {
 		input.Default = def
@@ -226,6 +239,7 @@ func (r *senderAuthenticationResource) Create(ctx context.Context, req resource.
 	data.Domain = types.StringValue(o.Domain)
 	data.Subdomain = types.StringValue(o.Subdomain)
 	data.Username = types.StringValue(o.Username)
+	data.Region = types.StringValue(o.Region)
 	data.Default = types.BoolValue(o.Default)
 	data.Legacy = types.BoolValue(o.Legacy)
 	data.Valid = types.BoolValue(o.Valid)
@@ -266,6 +280,7 @@ func (r *senderAuthenticationResource) Read(ctx context.Context, req resource.Re
 	data.Domain = types.StringValue(o.Domain)
 	data.Subdomain = types.StringValue(o.Subdomain)
 	data.Username = types.StringValue(o.Username)
+	data.Region = types.StringValue(o.Region)
 	data.Default = types.BoolValue(o.Default)
 	data.Legacy = types.BoolValue(o.Legacy)
 	data.Valid = types.BoolValue(o.Valid)
@@ -310,6 +325,7 @@ func (r *senderAuthenticationResource) Update(ctx context.Context, req resource.
 	data.Subdomain = types.StringValue(o.Subdomain)
 	data.Domain = types.StringValue(o.Domain)
 	data.Username = types.StringValue(o.Username)
+	data.Region = types.StringValue(o.Region)
 	data.IPs = ipsSet
 	data.Default = types.BoolValue(o.Default)
 	data.Legacy = types.BoolValue(o.Legacy)
@@ -379,6 +395,7 @@ func (r *senderAuthenticationResource) ImportState(ctx context.Context, req reso
 	data.Domain = types.StringValue(o.Domain)
 	data.Subdomain = types.StringValue(o.Subdomain)
 	data.Username = types.StringValue(o.Username)
+	data.Region = types.StringValue(o.Region)
 	data.IPs = ipsSet
 	data.Default = types.BoolValue(o.Default)
 	data.Legacy = types.BoolValue(o.Legacy)
