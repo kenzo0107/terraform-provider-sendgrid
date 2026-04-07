@@ -14,9 +14,12 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/kenzo0107/sendgrid"
 	"github.com/kenzo0107/terraform-provider-sendgrid/flex"
 )
@@ -45,6 +48,7 @@ type senderAuthenticationResourceModel struct {
 	CustomDkimSelector types.String `tfsdk:"custom_dkim_selector"`
 	DNS                types.Set    `tfsdk:"dns"`
 	Valid              types.Bool   `tfsdk:"valid"`
+	Region             types.String `tfsdk:"region"`
 }
 
 func (r *senderAuthenticationResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -137,6 +141,22 @@ For more detailed information, please see the [SendGrid documentation](https://d
 					},
 				},
 			},
+			"region": schema.StringAttribute{
+				MarkdownDescription: `The region associated with this authenticated domain. This is either "global" or "eu", depending on the location of the data center that authenticated the domain.
+Note: The region attribute can only be specified during resource creation. When importing an existing Sender Authentication, the region is not returned by the SendGrid API and will default to global.`,
+				Computed: true,
+				Optional: true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+				Validators: []validator.String{
+					stringOneOf(
+						"global",
+						"eu",
+					),
+				},
+				Default: stringdefault.StaticString("global"),
+			},
 		},
 	}
 }
@@ -170,6 +190,7 @@ func (r *senderAuthenticationResource) Create(ctx context.Context, req resource.
 	domain := data.Domain.ValueString()
 	input := &sendgrid.InputAuthenticateDomain{
 		Domain: domain,
+		Region: data.Region.ValueString(),
 	}
 
 	subdomain := data.Subdomain.ValueString()
@@ -192,6 +213,10 @@ func (r *senderAuthenticationResource) Create(ctx context.Context, req resource.
 	if customDkimSelector != "" {
 		input.CustomDkimSelector = customDkimSelector
 	}
+
+	tflog.Info(ctx, "Create (^-^)", map[string]interface{}{
+		"input": input,
+	})
 
 	res, err := retryOnRateLimit(ctx, func() (interface{}, error) {
 		return r.client.AuthenticateDomain(context.TODO(), input)
@@ -270,6 +295,11 @@ func (r *senderAuthenticationResource) Read(ctx context.Context, req resource.Re
 	data.Legacy = types.BoolValue(o.Legacy)
 	data.Valid = types.BoolValue(o.Valid)
 	data.DNS = convertDNSToSetType(o.DNS)
+
+	// The SendGrid API does not return the region in the GetAuthenticatedDomain response, so we set it to the default value during read
+	if data.Region.ValueString() == "" {
+		data.Region = types.StringValue("global")
+	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
@@ -384,6 +414,9 @@ func (r *senderAuthenticationResource) ImportState(ctx context.Context, req reso
 	data.Legacy = types.BoolValue(o.Legacy)
 	data.Valid = types.BoolValue(o.Valid)
 	data.DNS = convertDNSToSetType(o.DNS)
+
+	// region is not returned in the GetAuthenticatedDomain response, so we set it to the default value during import
+	data.Region = types.StringValue("global")
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 	if resp.Diagnostics.HasError() {

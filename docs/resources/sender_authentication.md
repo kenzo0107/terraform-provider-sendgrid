@@ -39,6 +39,8 @@ output "ips" {
 
 - `custom_dkim_selector` (String) Add a custom DKIM selector. Accepts three letters or numbers.
 - `default` (Boolean) Whether to use this authenticated domain as the fallback if no authenticated domains match the sender's domain.
+- `region` (String) The region associated with this authenticated domain. This is either "global" or "eu", depending on the location of the data center that authenticated the domain.
+Note: The region attribute can only be specified during resource creation. When importing an existing Sender Authentication, the region is not returned by the SendGrid API and will default to global.
 - `subdomain` (String) The subdomain to use for this authenticated domain.
 
 ### Read-Only
