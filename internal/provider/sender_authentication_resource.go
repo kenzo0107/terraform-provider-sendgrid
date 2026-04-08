@@ -296,6 +296,11 @@ func (r *senderAuthenticationResource) Read(ctx context.Context, req resource.Re
 	data.Valid = types.BoolValue(o.Valid)
 	data.DNS = convertDNSToSetType(o.DNS)
 
+	// The SendGrid API does not return the region in the GetAuthenticatedDomain response, so we set it to the default value during read
+	if data.Region.ValueString() == "" {
+		data.Region = types.StringValue("global")
+	}
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
