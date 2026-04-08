@@ -31,6 +31,7 @@ type sendgridProvider struct {
 
 // sendgridProviderModel describes the provider data model.
 type sendgridProviderModel struct {
+	APIHost types.String `tfsdk:"api_host"`
 	APIKey  types.String `tfsdk:"api_key"`
 	Subuser types.String `tfsdk:"subuser"`
 }
@@ -43,6 +44,11 @@ func (p *sendgridProvider) Metadata(ctx context.Context, req provider.MetadataRe
 func (p *sendgridProvider) Schema(ctx context.Context, req provider.SchemaRequest, resp *provider.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Attributes: map[string]schema.Attribute{
+			"api_host": schema.StringAttribute{
+				MarkdownDescription: "FQDN for Sendgrid API. May also be provided via SENDGRID_API_HOST environment variable.",
+				Optional:            true,
+				Sensitive:           true,
+			},
 			"api_key": schema.StringAttribute{
 				MarkdownDescription: "API Key for Sendgrid API. May also be provided via SENDGRID_API_KEY environment variable.",
 				Optional:            true,
@@ -58,6 +64,7 @@ func (p *sendgridProvider) Schema(ctx context.Context, req provider.SchemaReques
 
 func (p *sendgridProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
 	// Check environment variables
+	apiHost := os.Getenv("SENDGRID_API_HOST")
 	apiKey := os.Getenv("SENDGRID_API_KEY")
 	subuser := os.Getenv("SENDGRID_SUBUSER")
 
@@ -68,6 +75,9 @@ func (p *sendgridProvider) Configure(ctx context.Context, req provider.Configure
 
 	// Default values to environment variables, but override
 	// with Terraform configuration value if set.
+	if !config.APIHost.IsNull() {
+		apiHost = config.APIHost.ValueString()
+	}
 
 	if !config.APIKey.IsNull() {
 		apiKey = config.APIKey.ValueString()
@@ -79,7 +89,6 @@ func (p *sendgridProvider) Configure(ctx context.Context, req provider.Configure
 
 	// If any of the expected configurations are missing, return
 	// errors with provider-specific guidance.
-
 	if apiKey == "" {
 		resp.Diagnostics.AddAttributeError(
 			path.Root("api_key"),
@@ -92,7 +101,6 @@ func (p *sendgridProvider) Configure(ctx context.Context, req provider.Configure
 
 	// If practitioner provided a configuration value for any of the
 	// attributes, it must be a known value.
-
 	if config.APIKey.IsUnknown() {
 		resp.Diagnostics.AddAttributeError(
 			path.Root("api_key"),
@@ -106,12 +114,17 @@ func (p *sendgridProvider) Configure(ctx context.Context, req provider.Configure
 		return
 	}
 
-	var client *sendgrid.Client
+	// Conditionally create slice of options for client creation
+	opts := []sendgrid.Option{}
 	if subuser != "" {
-		client = sendgrid.New(apiKey, sendgrid.OptionSubuser(subuser))
-	} else {
-		client = sendgrid.New(apiKey)
+		opts = append(opts, sendgrid.OptionSubuser(subuser))
 	}
+	if apiHost != "" {
+		opts = append(opts, sendgrid.OptionBaseURL(apiHost))
+	}
+
+	var client *sendgrid.Client
+	client = sendgrid.New(apiKey, opts...)
 
 	// Make the SendGrid api key available during DataSource and Resource
 	// type Configure methods.
