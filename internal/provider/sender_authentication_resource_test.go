@@ -29,6 +29,7 @@ func TestAccSenderAuthenticationResource(t *testing.T) {
 					resource.TestCheckResourceAttr(resourceName, "valid", "false"),
 					resource.TestCheckResourceAttr(resourceName, "default", "false"),
 					resource.TestCheckResourceAttr(resourceName, "legacy", "false"),
+					resource.TestCheckResourceAttr(resourceName, "automatic_security", "true"),
 				),
 			},
 			// ImportState testing
@@ -46,6 +47,7 @@ func TestAccSenderAuthenticationResource(t *testing.T) {
 					resource.TestCheckResourceAttr(resourceName, "valid", "false"),
 					resource.TestCheckResourceAttr(resourceName, "default", "false"),
 					resource.TestCheckResourceAttr(resourceName, "legacy", "false"),
+					resource.TestCheckResourceAttr(resourceName, "automatic_security", "true"),
 				),
 			},
 		},

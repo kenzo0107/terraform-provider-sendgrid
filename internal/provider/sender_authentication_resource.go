@@ -13,13 +13,13 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
-	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/kenzo0107/sendgrid"
 	"github.com/kenzo0107/terraform-provider-sendgrid/flex"
 )
@@ -49,6 +49,7 @@ type senderAuthenticationResourceModel struct {
 	DNS                types.Set    `tfsdk:"dns"`
 	Valid              types.Bool   `tfsdk:"valid"`
 	Region             types.String `tfsdk:"region"`
+	AutomaticSecurity  types.Bool   `tfsdk:"automatic_security"`
 }
 
 func (r *senderAuthenticationResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -157,6 +158,15 @@ Note: The region attribute can only be specified during resource creation. When 
 				},
 				Default: stringdefault.StaticString("global"),
 			},
+			"automatic_security": schema.BoolAttribute{
+				MarkdownDescription: "Whether to allow SendGrid to manage your SPF records, DKIM keys, and DKIM key rotation. (default: true)",
+				Optional:            true,
+				Computed:            true,
+				Default:             booldefault.StaticBool(true),
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.RequiresReplace(),
+				},
+			},
 		},
 	}
 }
@@ -189,8 +199,9 @@ func (r *senderAuthenticationResource) Create(ctx context.Context, req resource.
 
 	domain := data.Domain.ValueString()
 	input := &sendgrid.InputAuthenticateDomain{
-		Domain: domain,
-		Region: data.Region.ValueString(),
+		Domain:            domain,
+		Region:            data.Region.ValueString(),
+		AutomaticSecurity: data.AutomaticSecurity.ValueBool(),
 	}
 
 	subdomain := data.Subdomain.ValueString()
@@ -213,10 +224,6 @@ func (r *senderAuthenticationResource) Create(ctx context.Context, req resource.
 	if customDkimSelector != "" {
 		input.CustomDkimSelector = customDkimSelector
 	}
-
-	tflog.Info(ctx, "Create (^-^)", map[string]interface{}{
-		"input": input,
-	})
 
 	res, err := retryOnRateLimit(ctx, func() (interface{}, error) {
 		return r.client.AuthenticateDomain(context.TODO(), input)
@@ -243,19 +250,22 @@ func (r *senderAuthenticationResource) Create(ctx context.Context, req resource.
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	data.IPs = ipsSet
 
 	id := strconv.FormatInt(o.ID, 10)
-	data.ID = types.StringValue(id)
-	data.UserID = types.Int64Value(o.UserID)
-	data.Domain = types.StringValue(o.Domain)
-	data.Subdomain = types.StringValue(o.Subdomain)
-	data.Username = types.StringValue(o.Username)
-	data.Default = types.BoolValue(o.Default)
-	data.Legacy = types.BoolValue(o.Legacy)
-	data.Valid = types.BoolValue(o.Valid)
-	data.DNS = convertDNSToSetType(o.DNS)
-
+	data = senderAuthenticationResourceModel{
+		ID:                types.StringValue(id),
+		UserID:            types.Int64Value(o.UserID),
+		Domain:            types.StringValue(o.Domain),
+		Subdomain:         types.StringValue(o.Subdomain),
+		Username:          types.StringValue(o.Username),
+		Default:           types.BoolValue(o.Default),
+		Legacy:            types.BoolValue(o.Legacy),
+		Valid:             types.BoolValue(o.Valid),
+		DNS:               convertDNSToSetType(o.DNS),
+		AutomaticSecurity: types.BoolValue(o.AutomaticSecurity),
+		IPs:               ipsSet,
+		Region:            data.Region,
+	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -285,16 +295,21 @@ func (r *senderAuthenticationResource) Read(ctx context.Context, req resource.Re
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	data.IPs = ipsSet
 
-	data.UserID = types.Int64Value(o.UserID)
-	data.Domain = types.StringValue(o.Domain)
-	data.Subdomain = types.StringValue(o.Subdomain)
-	data.Username = types.StringValue(o.Username)
-	data.Default = types.BoolValue(o.Default)
-	data.Legacy = types.BoolValue(o.Legacy)
-	data.Valid = types.BoolValue(o.Valid)
-	data.DNS = convertDNSToSetType(o.DNS)
+	data = senderAuthenticationResourceModel{
+		ID:                types.StringValue(id),
+		IPs:               ipsSet,
+		UserID:            types.Int64Value(o.UserID),
+		Domain:            types.StringValue(o.Domain),
+		Subdomain:         types.StringValue(o.Subdomain),
+		Username:          types.StringValue(o.Username),
+		Default:           types.BoolValue(o.Default),
+		Legacy:            types.BoolValue(o.Legacy),
+		Valid:             types.BoolValue(o.Valid),
+		DNS:               convertDNSToSetType(o.DNS),
+		AutomaticSecurity: types.BoolValue(o.AutomaticSecurity),
+		Region:            data.Region,
+	}
 
 	// The SendGrid API does not return the region in the GetAuthenticatedDomain response, so we set it to the default value during read
 	if data.Region.ValueString() == "" {
@@ -335,16 +350,25 @@ func (r *senderAuthenticationResource) Update(ctx context.Context, req resource.
 		return
 	}
 
-	data.ID = types.StringValue(strconv.FormatInt(o.ID, 10))
-	data.UserID = types.Int64Value(o.UserID)
-	data.Subdomain = types.StringValue(o.Subdomain)
-	data.Domain = types.StringValue(o.Domain)
-	data.Username = types.StringValue(o.Username)
-	data.IPs = ipsSet
-	data.Default = types.BoolValue(o.Default)
-	data.Legacy = types.BoolValue(o.Legacy)
-	data.Valid = types.BoolValue(o.Valid)
-	data.DNS = convertDNSToSetType(o.DNS)
+	data = senderAuthenticationResourceModel{
+		ID:                types.StringValue(strconv.FormatInt(o.ID, 10)),
+		UserID:            types.Int64Value(o.UserID),
+		Domain:            types.StringValue(o.Domain),
+		Subdomain:         types.StringValue(o.Subdomain),
+		Username:          types.StringValue(o.Username),
+		Default:           types.BoolValue(o.Default),
+		Legacy:            types.BoolValue(o.Legacy),
+		Valid:             types.BoolValue(o.Valid),
+		DNS:               convertDNSToSetType(o.DNS),
+		AutomaticSecurity: types.BoolValue(o.AutomaticSecurity),
+		IPs:               ipsSet,
+		Region:            data.Region,
+	}
+
+	// The SendGrid API does not return the region in the GetAuthenticatedDomain response, so we set it to the default value during read
+	if data.Region.ValueString() == "" {
+		data.Region = types.StringValue("global")
+	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
@@ -353,13 +377,13 @@ func (r *senderAuthenticationResource) Update(ctx context.Context, req resource.
 }
 
 func (r *senderAuthenticationResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	var data senderAuthenticationResourceModel
-	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
+	var state senderAuthenticationResourceModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	domainId := data.ID.ValueString()
+	domainId := state.ID.ValueString()
 	id, _ := strconv.ParseInt(domainId, 10, 64)
 	_, err := retryOnRateLimit(ctx, func() (interface{}, error) {
 		return nil, r.client.DeleteAuthenticatedDomain(ctx, id)
@@ -403,18 +427,19 @@ func (r *senderAuthenticationResource) ImportState(ctx context.Context, req reso
 	if resp.Diagnostics.HasError() {
 		return
 	}
-
-	data.ID = types.StringValue(strconv.FormatInt(o.ID, 10))
-	data.UserID = types.Int64Value(o.UserID)
-	data.Domain = types.StringValue(o.Domain)
-	data.Subdomain = types.StringValue(o.Subdomain)
-	data.Username = types.StringValue(o.Username)
-	data.IPs = ipsSet
-	data.Default = types.BoolValue(o.Default)
-	data.Legacy = types.BoolValue(o.Legacy)
-	data.Valid = types.BoolValue(o.Valid)
-	data.DNS = convertDNSToSetType(o.DNS)
-
+	data = senderAuthenticationResourceModel{
+		ID:                types.StringValue(strconv.FormatInt(o.ID, 10)),
+		UserID:            types.Int64Value(o.UserID),
+		Domain:            types.StringValue(o.Domain),
+		Subdomain:         types.StringValue(o.Subdomain),
+		Username:          types.StringValue(o.Username),
+		Default:           types.BoolValue(o.Default),
+		Legacy:            types.BoolValue(o.Legacy),
+		Valid:             types.BoolValue(o.Valid),
+		DNS:               convertDNSToSetType(o.DNS),
+		AutomaticSecurity: types.BoolValue(o.AutomaticSecurity),
+		IPs:               ipsSet,
+	}
 	// region is not returned in the GetAuthenticatedDomain response, so we set it to the default value during import
 	data.Region = types.StringValue("global")
 
