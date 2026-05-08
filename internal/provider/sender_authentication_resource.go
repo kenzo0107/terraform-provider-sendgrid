@@ -500,6 +500,55 @@ func convertDNSToSetType(dns sendgrid.DNS) (recordsSet basetypes.SetValue) {
 			},
 		))
 	}
+	if dns.MailServer.Type != "" {
+		records = append(records, types.ObjectValueMust(
+			map[string]attr.Type{
+				"valid": types.BoolType,
+				"type":  types.StringType,
+				"host":  types.StringType,
+				"data":  types.StringType,
+			},
+			map[string]attr.Value{
+				"valid": types.BoolValue(dns.MailServer.Valid),
+				"type":  types.StringValue(dns.MailServer.Type),
+				"host":  types.StringValue(dns.MailServer.Host),
+				"data":  types.StringValue(dns.MailServer.Data),
+			},
+		))
+	}
+	if dns.SubdomainSpf.Type != "" {
+		records = append(records, types.ObjectValueMust(
+			map[string]attr.Type{
+				"valid": types.BoolType,
+				"type":  types.StringType,
+				"host":  types.StringType,
+				"data":  types.StringType,
+			},
+			map[string]attr.Value{
+				"valid": types.BoolValue(dns.SubdomainSpf.Valid),
+				"type":  types.StringValue(dns.SubdomainSpf.Type),
+				"host":  types.StringValue(dns.SubdomainSpf.Host),
+				"data":  types.StringValue(dns.SubdomainSpf.Data),
+			},
+		))
+	}
+	if dns.Dkim.Type != "" {
+		records = append(records, types.ObjectValueMust(
+			map[string]attr.Type{
+				"valid": types.BoolType,
+				"type":  types.StringType,
+				"host":  types.StringType,
+				"data":  types.StringType,
+			},
+			map[string]attr.Value{
+				"valid": types.BoolValue(dns.Dkim.Valid),
+				"type":  types.StringValue(dns.Dkim.Type),
+				"host":  types.StringValue(dns.Dkim.Host),
+				"data":  types.StringValue(dns.Dkim.Data),
+			},
+		))
+	}
+
 	var recordVariableElemType = types.ObjectType{
 		AttrTypes: map[string]attr.Type{
 			"valid": types.BoolType,
