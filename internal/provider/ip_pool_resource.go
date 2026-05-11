@@ -12,7 +12,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/kenzo0107/sendgrid"
 	"github.com/kenzo0107/terraform-provider-sendgrid/flex"
 )
@@ -200,7 +199,6 @@ func (r *ipPoolResource) Update(ctx context.Context, req resource.UpdateRequest,
 	}
 
 	addIPs, removeIPs, err := flex.DiffStringList(ctx, data.IPs, state.IPs)
-	tflog.Info(ctx, fmt.Sprintf("Diff IPs: add=%v, remove=%v", addIPs, removeIPs), nil)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Updating ip pool",
