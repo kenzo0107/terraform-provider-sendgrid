@@ -33,6 +33,7 @@ type sendgridProvider struct {
 type sendgridProviderModel struct {
 	APIKey  types.String `tfsdk:"api_key"`
 	Subuser types.String `tfsdk:"subuser"`
+	Region  types.String `tfsdk:"region"`
 }
 
 func (p *sendgridProvider) Metadata(ctx context.Context, req provider.MetadataRequest, resp *provider.MetadataResponse) {
@@ -52,6 +53,10 @@ func (p *sendgridProvider) Schema(ctx context.Context, req provider.SchemaReques
 				MarkdownDescription: "Subuser for Sendgrid API. May also be provided via SENDGRID_SUBUSER environment variable.",
 				Optional:            true,
 			},
+			"region": schema.StringAttribute{
+				MarkdownDescription: "Region for Sendgrid API. May also be provided via SENDGRID_REGION environment variable.",
+				Optional:            true,
+			},
 		},
 	}
 }
@@ -60,6 +65,12 @@ func (p *sendgridProvider) Configure(ctx context.Context, req provider.Configure
 	// Check environment variables
 	apiKey := os.Getenv("SENDGRID_API_KEY")
 	subuser := os.Getenv("SENDGRID_SUBUSER")
+	region := os.Getenv("SENDGRID_REGION")
+	tflog.Info(ctx, "(^-^)", map[string]interface{}{
+		"api_key": apiKey,
+		"subuser": subuser,
+		"region":  region,
+	})
 
 	// Retrieve provider data from configuration
 	var config sendgridProviderModel
@@ -75,6 +86,10 @@ func (p *sendgridProvider) Configure(ctx context.Context, req provider.Configure
 
 	if !config.Subuser.IsNull() {
 		subuser = config.Subuser.ValueString()
+	}
+
+	if !config.Region.IsNull() {
+		region = config.Region.ValueString()
 	}
 
 	// If any of the expected configurations are missing, return
@@ -106,12 +121,17 @@ func (p *sendgridProvider) Configure(ctx context.Context, req provider.Configure
 		return
 	}
 
-	var client *sendgrid.Client
+	opts := []sendgrid.Option{}
 	if subuser != "" {
-		client = sendgrid.New(apiKey, sendgrid.OptionSubuser(subuser))
-	} else {
-		client = sendgrid.New(apiKey)
+		opts = append(opts, sendgrid.OptionSubuser(subuser))
 	}
+
+	switch region {
+	case "eu":
+		opts = append(opts, sendgrid.OptionBaseURL(sendgrid.BaseURLEU))
+	}
+
+	client := sendgrid.New(apiKey, opts...)
 
 	// Make the SendGrid api key available during DataSource and Resource
 	// type Configure methods.
