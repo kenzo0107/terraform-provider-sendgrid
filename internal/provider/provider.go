@@ -54,7 +54,7 @@ func (p *sendgridProvider) Schema(ctx context.Context, req provider.SchemaReques
 				Optional:            true,
 			},
 			"region": schema.StringAttribute{
-				MarkdownDescription: "Region for Sendgrid API. May also be provided via SENDGRID_REGION environment variable.",
+				MarkdownDescription: "Region for Sendgrid API. May also be provided via SENDGRID_REGION environment variable. Valid values are `global` and `eu`, with `global` as the default.",
 				Optional:            true,
 			},
 		},
