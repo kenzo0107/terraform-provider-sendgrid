@@ -66,11 +66,6 @@ func (p *sendgridProvider) Configure(ctx context.Context, req provider.Configure
 	apiKey := os.Getenv("SENDGRID_API_KEY")
 	subuser := os.Getenv("SENDGRID_SUBUSER")
 	region := os.Getenv("SENDGRID_REGION")
-	tflog.Info(ctx, "(^-^)", map[string]interface{}{
-		"api_key": apiKey,
-		"subuser": subuser,
-		"region":  region,
-	})
 
 	// Retrieve provider data from configuration
 	var config sendgridProviderModel
