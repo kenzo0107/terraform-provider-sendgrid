@@ -30,5 +30,5 @@ provider "sendgrid" {
 ### Optional
 
 - `api_key` (String, Sensitive) API Key for Sendgrid API. May also be provided via SENDGRID_API_KEY environment variable.
-- `region` (String) Region for Sendgrid API. May also be provided via SENDGRID_REGION environment variable.
+- `region` (String) Region for Sendgrid API. May also be provided via SENDGRID_REGION environment variable. Valid values are `global` and `eu`, with `global` as the default.
 - `subuser` (String) Subuser for Sendgrid API. May also be provided via SENDGRID_SUBUSER environment variable.
