@@ -38,7 +38,7 @@ output "ips" {
 ### Optional
 
 - `automatic_security` (Boolean) Whether to allow SendGrid to manage your SPF records, DKIM keys, and DKIM key rotation. (default: true)
-- `custom_dkim_selector` (String) Add a custom DKIM selector. Accepts three letters or numbers.
+- `custom_dkim_selector` (String) Add a custom DKIM selector. Accepts three letters or numbers. The SendGrid API does not return the custom DKIM selector in the GetAuthenticatedDomain response, so we keep the value from the state.
 - `default` (Boolean) Whether to use this authenticated domain as the fallback if no authenticated domains match the sender's domain.
 - `region` (String) The region associated with this authenticated domain. This is either "global" or "eu", depending on the location of the data center that authenticated the domain.
 Note: The region attribute can only be specified during resource creation. When importing an existing Sender Authentication, the region is not returned by the SendGrid API and will default to global.

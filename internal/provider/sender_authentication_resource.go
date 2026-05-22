@@ -109,7 +109,7 @@ For more detailed information, please see the [SendGrid documentation](https://d
 				Computed:            true,
 			},
 			"custom_dkim_selector": schema.StringAttribute{
-				MarkdownDescription: "Add a custom DKIM selector. Accepts three letters or numbers.",
+				MarkdownDescription: "Add a custom DKIM selector. Accepts three letters or numbers. The SendGrid API does not return the custom DKIM selector in the GetAuthenticatedDomain response, so we keep the value from the state.",
 				Optional:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
@@ -253,18 +253,19 @@ func (r *senderAuthenticationResource) Create(ctx context.Context, req resource.
 
 	id := strconv.FormatInt(o.ID, 10)
 	data = senderAuthenticationResourceModel{
-		ID:                types.StringValue(id),
-		UserID:            types.Int64Value(o.UserID),
-		Domain:            types.StringValue(o.Domain),
-		Subdomain:         types.StringValue(o.Subdomain),
-		Username:          types.StringValue(o.Username),
-		Default:           types.BoolValue(o.Default),
-		Legacy:            types.BoolValue(o.Legacy),
-		Valid:             types.BoolValue(o.Valid),
-		DNS:               convertDNSToSetType(o.DNS),
-		AutomaticSecurity: types.BoolValue(o.AutomaticSecurity),
-		IPs:               ipsSet,
-		Region:            data.Region,
+		ID:                 types.StringValue(id),
+		UserID:             types.Int64Value(o.UserID),
+		Domain:             types.StringValue(o.Domain),
+		Subdomain:          types.StringValue(o.Subdomain),
+		Username:           types.StringValue(o.Username),
+		Default:            types.BoolValue(o.Default),
+		Legacy:             types.BoolValue(o.Legacy),
+		CustomDkimSelector: data.CustomDkimSelector, // The SendGrid API does not return the custom DKIM selector in the GetAuthenticatedDomain response, so we keep the value from the state
+		Valid:              types.BoolValue(o.Valid),
+		DNS:                convertDNSToSetType(o.DNS),
+		AutomaticSecurity:  types.BoolValue(o.AutomaticSecurity),
+		IPs:                ipsSet,
+		Region:             data.Region,
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
@@ -297,18 +298,19 @@ func (r *senderAuthenticationResource) Read(ctx context.Context, req resource.Re
 	}
 
 	data = senderAuthenticationResourceModel{
-		ID:                types.StringValue(id),
-		IPs:               ipsSet,
-		UserID:            types.Int64Value(o.UserID),
-		Domain:            types.StringValue(o.Domain),
-		Subdomain:         types.StringValue(o.Subdomain),
-		Username:          types.StringValue(o.Username),
-		Default:           types.BoolValue(o.Default),
-		Legacy:            types.BoolValue(o.Legacy),
-		Valid:             types.BoolValue(o.Valid),
-		DNS:               convertDNSToSetType(o.DNS),
-		AutomaticSecurity: types.BoolValue(o.AutomaticSecurity),
-		Region:            data.Region,
+		ID:                 types.StringValue(id),
+		IPs:                ipsSet,
+		UserID:             types.Int64Value(o.UserID),
+		Domain:             types.StringValue(o.Domain),
+		Subdomain:          types.StringValue(o.Subdomain),
+		Username:           types.StringValue(o.Username),
+		Default:            types.BoolValue(o.Default),
+		Legacy:             types.BoolValue(o.Legacy),
+		CustomDkimSelector: data.CustomDkimSelector, // The SendGrid API does not return the custom DKIM selector in the GetAuthenticatedDomain response, so we keep the value from the state
+		Valid:              types.BoolValue(o.Valid),
+		DNS:                convertDNSToSetType(o.DNS),
+		AutomaticSecurity:  types.BoolValue(o.AutomaticSecurity),
+		Region:             data.Region,
 	}
 
 	// The SendGrid API does not return the region in the GetAuthenticatedDomain response, so we set it to the default value during read
@@ -351,18 +353,19 @@ func (r *senderAuthenticationResource) Update(ctx context.Context, req resource.
 	}
 
 	data = senderAuthenticationResourceModel{
-		ID:                types.StringValue(strconv.FormatInt(o.ID, 10)),
-		UserID:            types.Int64Value(o.UserID),
-		Domain:            types.StringValue(o.Domain),
-		Subdomain:         types.StringValue(o.Subdomain),
-		Username:          types.StringValue(o.Username),
-		Default:           types.BoolValue(o.Default),
-		Legacy:            types.BoolValue(o.Legacy),
-		Valid:             types.BoolValue(o.Valid),
-		DNS:               convertDNSToSetType(o.DNS),
-		AutomaticSecurity: types.BoolValue(o.AutomaticSecurity),
-		IPs:               ipsSet,
-		Region:            data.Region,
+		ID:                 types.StringValue(strconv.FormatInt(o.ID, 10)),
+		UserID:             types.Int64Value(o.UserID),
+		Domain:             types.StringValue(o.Domain),
+		Subdomain:          types.StringValue(o.Subdomain),
+		Username:           types.StringValue(o.Username),
+		Default:            types.BoolValue(o.Default),
+		Legacy:             types.BoolValue(o.Legacy),
+		CustomDkimSelector: data.CustomDkimSelector,
+		Valid:              types.BoolValue(o.Valid),
+		DNS:                convertDNSToSetType(o.DNS),
+		AutomaticSecurity:  types.BoolValue(o.AutomaticSecurity),
+		IPs:                ipsSet,
+		Region:             data.Region,
 	}
 
 	// The SendGrid API does not return the region in the GetAuthenticatedDomain response, so we set it to the default value during read
@@ -428,17 +431,18 @@ func (r *senderAuthenticationResource) ImportState(ctx context.Context, req reso
 		return
 	}
 	data = senderAuthenticationResourceModel{
-		ID:                types.StringValue(strconv.FormatInt(o.ID, 10)),
-		UserID:            types.Int64Value(o.UserID),
-		Domain:            types.StringValue(o.Domain),
-		Subdomain:         types.StringValue(o.Subdomain),
-		Username:          types.StringValue(o.Username),
-		Default:           types.BoolValue(o.Default),
-		Legacy:            types.BoolValue(o.Legacy),
-		Valid:             types.BoolValue(o.Valid),
-		DNS:               convertDNSToSetType(o.DNS),
-		AutomaticSecurity: types.BoolValue(o.AutomaticSecurity),
-		IPs:               ipsSet,
+		ID:                 types.StringValue(strconv.FormatInt(o.ID, 10)),
+		UserID:             types.Int64Value(o.UserID),
+		Domain:             types.StringValue(o.Domain),
+		Subdomain:          types.StringValue(o.Subdomain),
+		Username:           types.StringValue(o.Username),
+		Default:            types.BoolValue(o.Default),
+		Legacy:             types.BoolValue(o.Legacy),
+		CustomDkimSelector: types.StringNull(), // The SendGrid API does not return the custom DKIM selector in the GetAuthenticatedDomain response, so we set it to null during import
+		Valid:              types.BoolValue(o.Valid),
+		DNS:                convertDNSToSetType(o.DNS),
+		AutomaticSecurity:  types.BoolValue(o.AutomaticSecurity),
+		IPs:                ipsSet,
 	}
 	// region is not returned in the GetAuthenticatedDomain response, so we set it to the default value during import
 	data.Region = types.StringValue("global")
