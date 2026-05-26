@@ -37,7 +37,15 @@ func TestAccSubuserResource(t *testing.T) {
 					resource.TestCheckTypeSetElemAttr(resourceName, "ips.*", ips[0]),
 				),
 			},
-			// ImportState testing
+			// ImportState testing.
+			//
+			// NOTE: We cannot easily assert end-to-end that "import then re-apply
+			// the same config" plans as Update (not Replace) here. The terraform
+			// plugin testing framework runs `terraform import` in the same working
+			// directory that already manages the resource from the previous step,
+			// which makes ImportStatePersist=true fail with "already managed by
+			// Terraform". The plan-modifier logic that prevents the replace is
+			// covered by unit tests in plan_modifiers_test.go (see #196).
 			{
 				ResourceName:            resourceName,
 				ImportState:             true,

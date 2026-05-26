@@ -12,8 +12,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/setplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
@@ -78,11 +78,11 @@ For more detailed information, please see the [SendGrid documentation](https://d
 				},
 			},
 			"password": schema.StringAttribute{
-				MarkdownDescription: "The password of the subuser. NOTE: The password will only be saved in the tfstate during the execution of the creation.",
+				MarkdownDescription: "The password of the subuser. NOTE: The password will only be saved in the tfstate during the execution of the creation. After `terraform import`, the state value is null because the SendGrid API does not return passwords; specifying a value in config will be absorbed into state on the next apply without recreating the resource.",
 				Optional:            true,
 				Sensitive:           true,
 				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
+					requiresReplaceIfStateNotNullString(),
 				},
 				Validators: []validator.String{
 					stringvalidator.ConflictsWith(path.MatchRoot("password_wo")),
@@ -90,13 +90,10 @@ For more detailed information, please see the [SendGrid documentation](https://d
 				},
 			},
 			"password_wo": schema.StringAttribute{
-				MarkdownDescription: "The write-only password of the subuser. NOTE: password_wo is write-only and cannot be saved in the tfstate.",
+				MarkdownDescription: "The write-only password of the subuser. NOTE: password_wo is write-only and cannot be saved in the tfstate. Rotate the password by changing `password_wo_version`.",
 				Optional:            true,
 				Sensitive:           true,
 				WriteOnly:           true,
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
-				},
 				Validators: []validator.String{
 					stringvalidator.ConflictsWith(path.MatchRoot("password")),
 					stringvalidator.ExactlyOneOf(path.MatchRoot("password"), path.MatchRoot("password_wo")),
@@ -104,19 +101,23 @@ For more detailed information, please see the [SendGrid documentation](https://d
 				},
 			},
 			"password_wo_version": schema.Int64Attribute{
-				MarkdownDescription: "The version of the write-only password of the subuser. Change this value to rotate the write-only password. `Important` The SendGrid API currently does not support updating subuser passwords. To change a password, the subuser must be recreated.",
+				MarkdownDescription: "The version of the write-only password of the subuser. Change this value to rotate the write-only password. `Important` The SendGrid API currently does not support updating subuser passwords. To change a password, the subuser must be recreated. After `terraform import`, the state value is null; specifying a value in config will be absorbed into state on the next apply without recreating the resource.",
 				Optional:            true,
 				PlanModifiers: []planmodifier.Int64{
-					int64planmodifier.RequiresReplace(),
+					requiresReplaceIfStateNotNullInt64(),
 				},
 				Validators: []validator.Int64{
 					int64validator.AlsoRequires(path.MatchRoot("password_wo")),
 				},
 			},
 			"ips": schema.SetAttribute{
-				MarkdownDescription: "The IP addresses that should be assigned to this subuser.",
+				MarkdownDescription: "The IP addresses that should be assigned to this subuser. The SendGrid API does not return the IPs associated with a subuser, so after `terraform import` the value is null in state. Either omit this attribute to preserve the imported (null) state, or set it explicitly to update the assignment.",
 				ElementType:         types.StringType,
-				Required:            true,
+				Optional:            true,
+				Computed:            true,
+				PlanModifiers: []planmodifier.Set{
+					setplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"region": schema.StringAttribute{
 				MarkdownDescription: "The region where the subuser is created. This attribute is for informational purposes only.",
@@ -170,6 +171,9 @@ func (r *subuserResource) Create(ctx context.Context, req resource.CreateRequest
 	}
 
 	ips := flex.ExpandFrameworkStringSet(ctx, plan.Ips)
+	if ips == nil {
+		ips = []string{}
+	}
 
 	var password string
 	if !plan.Password.IsNull() {
@@ -207,13 +211,19 @@ func (r *subuserResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 
+	ipsState, diags := types.SetValueFrom(ctx, types.StringType, ips)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	data := subuserResourceModel{
 		ID:                types.Int64Value(o.UserID),
 		Username:          types.StringValue(o.Username),
 		Email:             types.StringValue(o.Email),
 		Password:          plan.Password,
 		PasswordWOVersion: plan.PasswordWOVersion,
-		Ips:               plan.Ips,
+		Ips:               ipsState,
 		Region:            types.StringValue(o.Region),
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -252,14 +262,11 @@ func (r *subuserResource) Read(ctx context.Context, req resource.ReadRequest, re
 		return
 	}
 
-	if state.Ips.IsNull() {
-		state.Ips = types.SetNull(types.StringType)
-	}
-
 	subuser := subusers[0]
 	state.ID = types.Int64Value(subuser.ID)
 	state.Email = types.StringValue(subuser.Email)
 	state.Region = types.StringValue(subuser.Region)
+	// NOTE: ips and password values are preserved from state because the SendGrid API does not return them.
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -275,14 +282,22 @@ func (r *subuserResource) Update(ctx context.Context, req resource.UpdateRequest
 	}
 
 	username := data.Username.ValueString()
-	ips := flex.ExpandFrameworkStringSet(ctx, data.Ips)
 
-	if err := r.client.UpdateSubuserIps(ctx, username, ips); err != nil {
-		resp.Diagnostics.AddError(
-			"Updating subuser",
-			fmt.Sprintf("Unable to update subuser's ips (username: %s), got error: %s", username, err),
-		)
-		return
+	// Only call the ips update API when the user explicitly changed ips.
+	// In particular, do not push an empty list when state is null (post-import) and
+	// config omitted ips, which would otherwise clear all IPs assigned to the subuser.
+	if !data.Ips.Equal(state.Ips) && !data.Ips.IsNull() && !data.Ips.IsUnknown() {
+		ips := flex.ExpandFrameworkStringSet(ctx, data.Ips)
+		if ips == nil {
+			ips = []string{}
+		}
+		if err := r.client.UpdateSubuserIps(ctx, username, ips); err != nil {
+			resp.Diagnostics.AddError(
+				"Updating subuser",
+				fmt.Sprintf("Unable to update subuser's ips (username: %s), got error: %s", username, err),
+			)
+			return
+		}
 	}
 
 	data.ID = state.ID

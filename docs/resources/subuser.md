@@ -34,16 +34,16 @@ resource "sendgrid_subuser" "example" {
 ### Required
 
 - `email` (String) The email of the subuser.
-- `ips` (Set of String) The IP addresses that should be assigned to this subuser.
 - `username` (String) The username of the subuser.
 
 ### Optional
 
 > **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
 
-- `password` (String, Sensitive) The password of the subuser. NOTE: The password will only be saved in the tfstate during the execution of the creation.
-- `password_wo` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) The write-only password of the subuser. NOTE: password_wo is write-only and cannot be saved in the tfstate.
-- `password_wo_version` (Number) The version of the write-only password of the subuser. Change this value to rotate the write-only password. `Important` The SendGrid API currently does not support updating subuser passwords. To change a password, the subuser must be recreated.
+- `ips` (Set of String) The IP addresses that should be assigned to this subuser. The SendGrid API does not return the IPs associated with a subuser, so after `terraform import` the value is null in state. Either omit this attribute to preserve the imported (null) state, or set it explicitly to update the assignment.
+- `password` (String, Sensitive) The password of the subuser. NOTE: The password will only be saved in the tfstate during the execution of the creation. After `terraform import`, the state value is null because the SendGrid API does not return passwords; specifying a value in config will be absorbed into state on the next apply without recreating the resource.
+- `password_wo` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) The write-only password of the subuser. NOTE: password_wo is write-only and cannot be saved in the tfstate. Rotate the password by changing `password_wo_version`.
+- `password_wo_version` (Number) The version of the write-only password of the subuser. Change this value to rotate the write-only password. `Important` The SendGrid API currently does not support updating subuser passwords. To change a password, the subuser must be recreated. After `terraform import`, the state value is null; specifying a value in config will be absorbed into state on the next apply without recreating the resource.
 - `region` (String) The region where the subuser is created. This attribute is for informational purposes only.
 
 ### Read-Only
