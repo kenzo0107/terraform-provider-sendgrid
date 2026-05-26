@@ -31,8 +31,8 @@ func TestRequiresReplaceIfStateNotNullString(t *testing.T) {
 	t.Parallel()
 
 	tests := map[string]struct {
-		stateValue           types.String
-		planValue            types.String
+		stateValue            types.String
+		planValue             types.String
 		expectRequiresReplace bool
 	}{
 		"null state, set plan (post-import absorption) should not replace": {
@@ -84,8 +84,8 @@ func TestRequiresReplaceIfStateNotNullInt64(t *testing.T) {
 	t.Parallel()
 
 	tests := map[string]struct {
-		stateValue           types.Int64
-		planValue            types.Int64
+		stateValue            types.Int64
+		planValue             types.Int64
 		expectRequiresReplace bool
 	}{
 		"null state, set plan (post-import absorption) should not replace": {
