@@ -25,6 +25,14 @@ import (
 	"github.com/kenzo0107/terraform-provider-sendgrid/flex"
 )
 
+// subuserAccessInvalidScopeReason explains a SendGrid behaviour that is easy to hit and hard to
+// diagnose: sender_verification_legacy is assigned automatically to teammates at the parent
+// account level, so it reads as an ordinary scope, but it is not valid inside subuser_access.
+const subuserAccessInvalidScopeReason = "This scope is assigned automatically at the parent " +
+	"account level and is not valid inside subuser_access. SendGrid discards the whole " +
+	"subuser_access block without reporting an error when it is present, creating the teammate " +
+	"with default scopes only"
+
 // Ensure provider defined types fully satisfy framework interfaces.
 var _ resource.Resource = &ssoTeammateResource{}
 var _ resource.ResourceWithImportState = &ssoTeammateResource{}
@@ -218,7 +226,12 @@ For more detailed information, please see the [SendGrid documentation](https://d
 						"scopes": schema.SetAttribute{
 							ElementType:         types.StringType,
 							Optional:            true,
-							MarkdownDescription: "Add or remove permissions that the Teammate can access on behalf of the Subuser. See [Teammate Permissions](https://www.twilio.com/docs/sendgrid/ui/account-and-settings/teammate-permissions) for a complete list of available scopes. You should not include this property in the request when the `permission_type` property is set to `admin` — administrators have full access to the specified Subuser.",
+							MarkdownDescription: "Add or remove permissions that the Teammate can access on behalf of the Subuser. See [Teammate Permissions](https://www.twilio.com/docs/sendgrid/ui/account-and-settings/teammate-permissions) for a complete list of available scopes. You should not include this property in the request when the `permission_type` property is set to `admin` — administrators have full access to the specified Subuser. `sender_verification_legacy` is not valid here even though SendGrid assigns it automatically at the parent account level: including it makes SendGrid discard the whole `subuser_access` block without reporting an error, creating the Teammate with default scopes only.",
+							Validators: []validator.Set{
+								setvalidator.ValueStringsAre(
+									stringNoneOf(subuserAccessInvalidScopeReason, "sender_verification_legacy"),
+								),
+							},
 						},
 					},
 				},
@@ -308,7 +321,39 @@ func (r *ssoTeammateResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 
-	saArray := fromOutputSubuserAccessArray(o.SubuserAccess)
+	// NOTE: The creation API answers 201 with subuser_access omitted when it discarded the value, so
+	//       an empty response here means the teammate was created without the requested access.
+	//       Report that instead of recording the resource as if the request had been applied.
+	if !o.IsAdmin && len(data.SubuserAccess) > 0 && len(o.SubuserAccess) == 0 {
+		// NOTE: The teammate exists in SendGrid at this point. Save it before reporting the error so
+		//       Terraform tracks it as tainted and replaces it on the next apply, rather than failing
+		//       on a duplicate that has to be deleted or imported by hand.
+		resp.Diagnostics.Append(resp.State.Set(ctx, &ssoTeammateResourceModel{
+			ID:        types.StringValue(o.Email),
+			Email:     types.StringValue(o.Email),
+			IsAdmin:   types.BoolValue(o.IsAdmin),
+			FirstName: types.StringValue(o.FirstName),
+			LastName:  types.StringValue(o.LastName),
+			Username:  types.StringValue(o.Email),
+		})...)
+		resp.Diagnostics.AddError(
+			"Creating SSO teammate",
+			fmt.Sprintf(
+				"SendGrid created teammate %s but did not apply the requested subuser_access. It "+
+					"does this without reporting an error when subuser_access contains a scope that "+
+					"is not valid for a subuser, and the teammate is left holding default scopes "+
+					"only. Check the scopes listed in subuser_access and apply again.",
+				o.Email,
+			),
+		)
+		return
+	}
+
+	// NOTE: The creation API normalizes the subuser access it echoes back, sorting the scopes and
+	//       omitting them altogether for admin entries, so the echo cannot be stored as-is. Adopt the
+	//       planned value, which the check above has confirmed SendGrid applied. Drift against
+	//       SendGrid is still detected by the next Read.
+	saArray := data.SubuserAccess
 	// NOTE: The teammate read API returns subuser access with admin permissions to all subusers when the user is admin,
 	//       causing a discrepancy with the subuser access specified in the resource and resulting in an error.
 	if o.IsAdmin {

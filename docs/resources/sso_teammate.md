@@ -57,7 +57,7 @@ Required:
 
 Optional:
 
-- `scopes` (Set of String) Add or remove permissions that the Teammate can access on behalf of the Subuser. See [Teammate Permissions](https://www.twilio.com/docs/sendgrid/ui/account-and-settings/teammate-permissions) for a complete list of available scopes. You should not include this property in the request when the `permission_type` property is set to `admin` — administrators have full access to the specified Subuser.
+- `scopes` (Set of String) Add or remove permissions that the Teammate can access on behalf of the Subuser. See [Teammate Permissions](https://www.twilio.com/docs/sendgrid/ui/account-and-settings/teammate-permissions) for a complete list of available scopes. You should not include this property in the request when the `permission_type` property is set to `admin` — administrators have full access to the specified Subuser. `sender_verification_legacy` is not valid here even though SendGrid assigns it automatically at the parent account level: including it makes SendGrid discard the whole `subuser_access` block without reporting an error, creating the Teammate with default scopes only.
 
 ## Import
 
