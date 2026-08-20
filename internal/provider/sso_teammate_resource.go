@@ -131,6 +131,51 @@ func fromSendgridSubuserAccessArray(output []sendgrid.SubuserAccess) []ssoSubuse
 	return saArrayOutput
 }
 
+// filterUndeclaredSubuserAccessScopes drops the scopes SendGrid added on its own from the
+// subuser access returned by the read API.
+//
+// SendGrid assigns a baseline of read scopes inside subuser_access (mail_settings.read,
+// stats.read, user.* and others) in addition to the requested ones. The exact list is not
+// documented and appears to depend on the account settings, so it cannot be filtered by a
+// fixed list the way autoScopes is. Instead, scopes that the state does not declare for the
+// same subuser are treated as unmanaged and dropped before storing, which keeps
+// configurations that do not list the baseline free of a permanent diff. Removing a
+// declared scope outside Terraform still surfaces as drift, because filtering cannot
+// resurrect a scope the API stopped returning. Entries for subusers unknown to the state
+// (e.g. right after import) are kept as returned.
+func filterUndeclaredSubuserAccessScopes(state, fetched []ssoSubuserAccessResourceModel) []ssoSubuserAccessResourceModel {
+	if len(fetched) == 0 || len(state) == 0 {
+		return fetched
+	}
+
+	declared := make(map[int64]map[string]struct{}, len(state))
+	for _, sa := range state {
+		scopes := make(map[string]struct{}, len(sa.Scopes))
+		for _, s := range sa.Scopes {
+			scopes[s.ValueString()] = struct{}{}
+		}
+		declared[sa.ID.ValueInt64()] = scopes
+	}
+
+	filtered := make([]ssoSubuserAccessResourceModel, 0, len(fetched))
+	for _, sa := range fetched {
+		scopes, ok := declared[sa.ID.ValueInt64()]
+		if !ok {
+			filtered = append(filtered, sa)
+			continue
+		}
+		var kept []types.String
+		for _, s := range sa.Scopes {
+			if _, ok := scopes[s.ValueString()]; ok {
+				kept = append(kept, s)
+			}
+		}
+		sa.Scopes = kept
+		filtered = append(filtered, sa)
+	}
+	return filtered
+}
+
 type ssoTeammateResourceModel struct {
 	ID            types.String                    `tfsdk:"id"`
 	Email         types.String                    `tfsdk:"email"`
@@ -226,7 +271,7 @@ For more detailed information, please see the [SendGrid documentation](https://d
 						"scopes": schema.SetAttribute{
 							ElementType:         types.StringType,
 							Optional:            true,
-							MarkdownDescription: "Add or remove permissions that the Teammate can access on behalf of the Subuser. See [Teammate Permissions](https://www.twilio.com/docs/sendgrid/ui/account-and-settings/teammate-permissions) for a complete list of available scopes. You should not include this property in the request when the `permission_type` property is set to `admin` — administrators have full access to the specified Subuser. `sender_verification_legacy` is not valid here even though SendGrid assigns it automatically at the parent account level: including it makes SendGrid discard the whole `subuser_access` block without reporting an error, creating the Teammate with default scopes only.",
+							MarkdownDescription: "Add or remove permissions that the Teammate can access on behalf of the Subuser. See [Teammate Permissions](https://www.twilio.com/docs/sendgrid/ui/account-and-settings/teammate-permissions) for a complete list of available scopes. You should not include this property in the request when the `permission_type` property is set to `admin` — administrators have full access to the specified Subuser. `sender_verification_legacy` is not valid here even though SendGrid assigns it automatically at the parent account level: including it makes SendGrid discard the whole `subuser_access` block without reporting an error, creating the Teammate with default scopes only. SendGrid also assigns a baseline of read scopes (e.g. `mail_settings.read`, `stats.read`) to every subuser access entry on its own; scopes not declared here are treated as unmanaged and are not tracked in state, so they do not show up as a diff.",
 							Validators: []validator.Set{
 								setvalidator.ValueStringsAre(
 									stringNoneOf(subuserAccessInvalidScopeReason, "sender_verification_legacy"),
@@ -426,7 +471,7 @@ func (r *ssoTeammateResource) Read(ctx context.Context, req resource.ReadRequest
 			scopes = append(scopes, types.StringValue(s))
 		}
 	}
-	saArray := fromSendgridSubuserAccessArray(sa.SubuserAccess)
+	saArray := filterUndeclaredSubuserAccessScopes(data.SubuserAccess, fromSendgridSubuserAccessArray(sa.SubuserAccess))
 
 	// NOTE: The teammate read API returns scopes even if the subuser access is set,
 	//       causing a discrepancy with the scopes specified in the resource and resulting in an error.
