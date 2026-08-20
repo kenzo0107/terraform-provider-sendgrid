@@ -60,6 +60,11 @@ jobs:
   # Run acceptance tests in a matrix with Terraform CLI versions
   test:
     name: Terraform Provider Acceptance Tests
+    # Dependabot-triggered pull_request runs don't get repository secrets,
+    # so SENDGRID_API_KEY resolves empty and every API call fails with
+    # "authorization required". Skip until the PR is reviewed and merged,
+    # when the scheduled run against main exercises the real API key.
+    if: github.actor != 'dependabot[bot]'
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 30
