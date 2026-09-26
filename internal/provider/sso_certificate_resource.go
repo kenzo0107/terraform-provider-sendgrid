@@ -171,6 +171,21 @@ func (r *ssoCertificateResource) Read(ctx context.Context, req resource.ReadRequ
 	}
 }
 
+// newUpdateSSOCertificateInput builds the PATCH body for an SSO certificate
+// update from the planned values.
+//
+// Enabled has no omitempty in the client library, so it must be set
+// explicitly or the request would send false. The resource always creates
+// certificates enabled and exposes no enabled attribute, so it is pinned to
+// true here as well.
+func newUpdateSSOCertificateInput(plan ssoCertificateResourceModel) *sendgrid.InputUpdateSSOCertificate {
+	return &sendgrid.InputUpdateSSOCertificate{
+		PublicCertificate: plan.PublicCertificate.ValueString(),
+		IntegrationID:     plan.IntegrationID.ValueString(),
+		Enabled:           true,
+	}
+}
+
 func (r *ssoCertificateResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var data, state ssoCertificateResourceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
@@ -179,13 +194,7 @@ func (r *ssoCertificateResource) Update(ctx context.Context, req resource.Update
 		return
 	}
 
-	input := &sendgrid.InputUpdateSSOCertificate{}
-	if !data.IntegrationID.IsNull() && data.IntegrationID != state.IntegrationID {
-		input.IntegrationID = data.IntegrationID.ValueString()
-	}
-	if !data.PublicCertificate.IsNull() && data.PublicCertificate != state.PublicCertificate {
-		input.PublicCertificate = data.PublicCertificate.ValueString()
-	}
+	input := newUpdateSSOCertificateInput(data)
 
 	certificateId := state.ID.ValueString()
 	id, _ := strconv.ParseInt(certificateId, 10, 64)
