@@ -213,6 +213,33 @@ func (r *ssoIntegrationResource) Read(ctx context.Context, req resource.ReadRequ
 	}
 }
 
+// newUpdateSSOIntegrationInput builds the PATCH body for an SSO integration
+// update from the planned values.
+//
+// Every field is sent, not only the ones that changed: the client library
+// encodes Enabled and CompletedIntegration as plain bools without omitempty,
+// so leaving a field unset would send false and could disable the integration
+// when an unrelated attribute such as signout_url is updated.
+//
+// completed_integration is Computed only, so the plan normally carries the
+// prior state value via UseStateForUnknown. Fall back to state when the plan
+// value is unknown or null so the current server value is preserved.
+func newUpdateSSOIntegrationInput(plan, state ssoIntegrationResourceModel) *sendgrid.InputUpdateSSOIntegration {
+	completed := plan.CompletedIntegration
+	if completed.IsUnknown() || completed.IsNull() {
+		completed = state.CompletedIntegration
+	}
+
+	return &sendgrid.InputUpdateSSOIntegration{
+		Name:                 plan.Name.ValueString(),
+		Enabled:              plan.Enabled.ValueBool(),
+		SigninURL:            plan.SigninURL.ValueString(),
+		SignoutURL:           plan.SignoutURL.ValueString(),
+		EntityID:             plan.EntityID.ValueString(),
+		CompletedIntegration: completed.ValueBool(),
+	}
+}
+
 func (r *ssoIntegrationResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var data, state ssoIntegrationResourceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
@@ -221,25 +248,7 @@ func (r *ssoIntegrationResource) Update(ctx context.Context, req resource.Update
 		return
 	}
 
-	input := &sendgrid.InputUpdateSSOIntegration{}
-	if !data.Name.IsNull() && data.Name != state.Name {
-		input.Name = data.Name.ValueString()
-	}
-	if !data.Enabled.IsNull() && data.Enabled != state.Enabled {
-		input.Enabled = data.Enabled.ValueBool()
-	}
-	if !data.SigninURL.IsNull() && data.SigninURL != state.SigninURL {
-		input.SigninURL = data.SigninURL.ValueString()
-	}
-	if !data.SignoutURL.IsNull() && data.SignoutURL != state.SignoutURL {
-		input.SignoutURL = data.SignoutURL.ValueString()
-	}
-	if !data.EntityID.IsNull() && data.EntityID != state.EntityID {
-		input.EntityID = data.EntityID.ValueString()
-	}
-	if !data.CompletedIntegration.IsNull() && data.CompletedIntegration != state.CompletedIntegration {
-		input.CompletedIntegration = data.CompletedIntegration.ValueBool()
-	}
+	input := newUpdateSSOIntegrationInput(data, state)
 
 	id := state.ID.ValueString()
 	o, err := r.client.UpdateSSOIntegration(ctx, id, input)
