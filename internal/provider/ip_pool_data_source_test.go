@@ -20,6 +20,13 @@ func TestAccIPPoolDataSource(t *testing.T) {
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
+			// Create resource first. Reading the pool by name in the same apply
+			// as its creation intermittently fails with "Unable to locate
+			// specified IPs Pool" because the SendGrid API is eventually
+			// consistent, so the data source lookup runs in a separate step.
+			{
+				Config: testAccIPPoolResourceConfig(name),
+			},
 			// Read testing
 			{
 				Config: testAccIPPoolDataSourceConfig(name),
