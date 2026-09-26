@@ -11,6 +11,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/kenzo0107/sendgrid"
 )
@@ -48,6 +50,9 @@ Provides SSO Certificate resource.
 			"id": schema.StringAttribute{
 				MarkdownDescription: "A unique ID assigned to the certificate by SendGrid.",
 				Computed:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"public_certificate": schema.StringAttribute{
 				MarkdownDescription: "This public certificate allows SendGrid to verify that SAML requests it receives are signed by an IdP that it recognizes.",

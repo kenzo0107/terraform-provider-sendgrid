@@ -10,6 +10,9 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/kenzo0107/sendgrid"
 )
@@ -51,6 +54,9 @@ Provides SSO Integration resource.
 			"id": schema.StringAttribute{
 				MarkdownDescription: "A unique ID assigned to the configuration by SendGrid.",
 				Computed:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"name": schema.StringAttribute{
 				MarkdownDescription: "The name of your integration. This name can be anything that makes sense for your organization (eg. Twilio SendGrid)",
@@ -75,14 +81,23 @@ Provides SSO Integration resource.
 			"completed_integration": schema.BoolAttribute{
 				MarkdownDescription: "Indicates if the integration is complete.",
 				Computed:            true,
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"single_signon_url": schema.StringAttribute{
 				MarkdownDescription: "The URL where your IdP should POST its SAML response. This is the Twilio SendGrid URL that is responsible for receiving and parsing a SAML assertion. This is the same URL as the Audience URL when using SendGrid.",
 				Computed:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"audience_url": schema.StringAttribute{
 				MarkdownDescription: "The URL where your IdP should POST its SAML response. This is the Twilio SendGrid URL that is responsible for receiving and parsing a SAML assertion. This is the same URL as the Single Sign-On URL when using SendGrid.",
 				Computed:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 		},
 	}
@@ -226,7 +241,7 @@ func (r *ssoIntegrationResource) Update(ctx context.Context, req resource.Update
 		input.CompletedIntegration = data.CompletedIntegration.ValueBool()
 	}
 
-	id := data.ID.ValueString()
+	id := state.ID.ValueString()
 	o, err := r.client.UpdateSSOIntegration(ctx, id, input)
 	if err != nil {
 		resp.Diagnostics.AddError(
