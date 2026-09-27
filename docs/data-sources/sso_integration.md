@@ -33,5 +33,5 @@ data "sendgrid_sso_integration" "example" {
 - `entity_id` (String) An identifier provided by your IdP to identify Twilio SendGrid in the SAML interaction. This is called the "SAML Issuer ID" in the Twilio SendGrid UI.
 - `name` (String) The name of your integration. This name can be anything that makes sense for your organization (eg. Twilio SendGrid)
 - `signin_url` (String) The IdP's SAML POST endpoint. This endpoint should receive requests and initiate an SSO login flow. This is called the "Embed Link" in the Twilio SendGrid UI.
-- `signout_url` (String) This URL is relevant only for an IdP-initiated authentication flow. If a user authenticates from their IdP, this URL will return them to their IdP when logging out.
+- `signout_url` (String) This URL is relevant only for an IdP-initiated authentication flow. If a user authenticates from their IdP, this URL will return them to their IdP when logging out. This value may be empty for an integration created in the SendGrid UI, because the UI does not expose this field.
 - `single_signon_url` (String) The URL where your IdP should POST its SAML response. This is the Twilio SendGrid URL that is responsible for receiving and parsing a SAML assertion. This is the same URL as the Audience URL when using SendGrid.
