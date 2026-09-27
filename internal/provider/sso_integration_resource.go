@@ -71,8 +71,10 @@ Provides SSO Integration resource.
 				Required:            true,
 			},
 			"signout_url": schema.StringAttribute{
-				MarkdownDescription: "This URL is relevant only for an IdP-initiated authentication flow. If a user authenticates from their IdP, this URL will return them to their IdP when logging out.",
-				Required:            true,
+				MarkdownDescription: "This URL is relevant only for an IdP-initiated authentication flow. If a user authenticates from their IdP, this URL will return them to their IdP when logging out. " +
+					"The SendGrid UI does not expose this field, but the SendGrid API requires it when creating or updating an integration, so it is required here as well. " +
+					"An integration created in the SendGrid UI has an empty `signout_url` on the SendGrid side; when importing such an integration, set this attribute in your configuration and the first apply after import will send it to SendGrid.",
+				Required: true,
 			},
 			"entity_id": schema.StringAttribute{
 				MarkdownDescription: "An identifier provided by your IdP to identify Twilio SendGrid in the SAML interaction. This is called the \"SAML Issuer ID\" in the Twilio SendGrid UI.",
