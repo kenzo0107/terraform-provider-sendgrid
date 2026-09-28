@@ -21,7 +21,8 @@ func newTeammateDataSource() datasource.DataSource {
 }
 
 type teammateDataSource struct {
-	client *sendgrid.Client
+	client    *sendgrid.Client
+	teammates *teammateCache
 }
 
 type teammateDataSourceModel struct {
@@ -53,16 +54,17 @@ func (d *teammateDataSource) Configure(ctx context.Context, req datasource.Confi
 		return
 	}
 
-	client, ok := req.ProviderData.(*sendgrid.Client)
+	pd, ok := providerDataFrom(req.ProviderData)
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Data Source Configure Type",
-			fmt.Sprintf("Expected *sendgrid.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf("Expected *providerData, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
 		return
 	}
 
-	d.client = client
+	d.client = pd.client
+	d.teammates = pd.teammates
 }
 
 func (d *teammateDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
@@ -152,7 +154,7 @@ func (d *teammateDataSource) Read(ctx context.Context, req datasource.ReadReques
 
 	email := s.Email.ValueString()
 
-	pendingUser, err := pendingTeammateByEmail(ctx, d.client, email)
+	pendingUser, err := pendingTeammateByEmail(ctx, d.teammates, email)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Reading teammate",
@@ -178,7 +180,7 @@ func (d *teammateDataSource) Read(ctx context.Context, req datasource.ReadReques
 		return
 	}
 
-	userByEmail, err := getTeammateByEmail(ctx, d.client, email)
+	userByEmail, err := getTeammateByEmail(ctx, d.teammates, email)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Reading teammate",

@@ -31,6 +31,10 @@ type fakeTeammateAPI struct {
 	details map[string]sendgrid.OutputGetTeammate
 	// rateLimitDetails makes GET /teammates/{username} answer 429 when set.
 	rateLimitDetails bool
+	// listDelay slows down the list endpoints so concurrent callers overlap.
+	listDelay time.Duration
+	// failPending makes GET /teammates/pending answer 500 that many times.
+	failPending int
 
 	mu    sync.Mutex
 	calls map[string]int
@@ -62,6 +66,17 @@ func (a *fakeTeammateAPI) count(name string) {
 	a.calls[name]++
 }
 
+// takePendingFailure consumes one scheduled failure of GET /teammates/pending.
+func (a *fakeTeammateAPI) takePendingFailure() bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.failPending == 0 {
+		return false
+	}
+	a.failPending--
+	return true
+}
+
 func (a *fakeTeammateAPI) got(name string) int {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -78,10 +93,18 @@ func (a *fakeTeammateAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case r.URL.Path == "/teammates/pending":
 		a.count(callPending)
+		time.Sleep(a.listDelay)
+		if a.takePendingFailure() {
+			writeJSON(w, http.StatusInternalServerError, map[string]interface{}{
+				"errors": []map[string]string{{"message": "internal error"}},
+			})
+			return
+		}
 		writeJSON(w, http.StatusOK, sendgrid.OutputGetPendingTeammates{PendingTeammates: a.pending})
 
 	case r.URL.Path == "/teammates":
 		a.count(callList)
+		time.Sleep(a.listDelay)
 		limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 		offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
 		if limit != teammatesPageLimit {
@@ -180,7 +203,7 @@ func TestGetTeammateByEmail(t *testing.T) {
 			api, client := newFakeTeammateAPI(t)
 			api.teammates = makeTeammates(tt.teammates)
 
-			got, err := getTeammateByEmail(context.Background(), client, tt.email)
+			got, err := getTeammateByEmail(context.Background(), newTeammateCache(client), tt.email)
 			if err != nil {
 				t.Fatalf("getTeammateByEmail() error = %v", err)
 			}
@@ -313,7 +336,7 @@ func TestLookupTeammate(t *testing.T) {
 			api, client := newFakeTeammateAPI(t)
 			tt.setup(api)
 
-			got, err := lookupTeammate(context.Background(), client, tt.state)
+			got, err := lookupTeammate(context.Background(), client, newTeammateCache(client), tt.state)
 			if err != nil {
 				t.Fatalf("lookupTeammate() error = %v", err)
 			}
@@ -340,7 +363,7 @@ func TestLookupTeammate_RateLimitIsNotSwallowedByFallback(t *testing.T) {
 	api, client := newFakeTeammateAPI(t)
 	api.rateLimitDetails = true
 
-	_, err := lookupTeammate(context.Background(), client, teammateResourceModel{
+	_, err := lookupTeammate(context.Background(), client, newTeammateCache(client), teammateResourceModel{
 		Email:    types.StringValue("alice@example.com"),
 		Username: types.StringValue("alice"),
 	})
