@@ -76,6 +76,14 @@ The SendGrid provider manages resources of a [Twilio SendGrid](https://sendgrid.
 Every request is retried automatically when SendGrid answers with HTTP 429. The provider waits until the
 window reported by the ` + "`X-RateLimit-Reset`" + ` header ends (up to 5 retries, at most 60 seconds per wait) before
 failing. Only 429 responses are retried, so a request is never applied twice. Each attempt times out after 60 seconds.
+
+## Teammate lookups
+
+` + "`sendgrid_teammate`" + ` resources whose ` + "`username`" + ` is already in state are read with a single request. Teammates
+without a username yet (pending invitations, or the first refresh after import) and ` + "`data.sendgrid_teammate`" + ` are found
+by email in the teammate and pending-teammate lists. Those two lists are fetched once and shared across lookups for up to
+30 seconds within one provider instance, so refreshing many such resources costs one detail request each instead of a list
+scan each. The cache lives in memory only and is dropped after every teammate write.
 `,
 		Attributes: map[string]schema.Attribute{
 			"api_key": schema.StringAttribute{
