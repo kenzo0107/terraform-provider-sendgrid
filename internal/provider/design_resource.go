@@ -164,22 +164,11 @@ func (r *designResource) Create(ctx context.Context, req resource.CreateRequest,
 		input.Categories = flex.ExpandFrameworkStringSet(ctx, plan.Categories)
 	}
 
-	res, err := retryOnRateLimit(ctx, func() (interface{}, error) {
-		return r.client.CreateDesign(ctx, input)
-	})
+	o, err := r.client.CreateDesign(ctx, input)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Creating design",
 			fmt.Sprintf("Unable to create design, got error: %s", err),
-		)
-		return
-	}
-
-	o, ok := res.(*sendgrid.OutputCreateDesign)
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Creating design",
-			"Failed to assert type *sendgrid.OutputCreateDesign",
 		)
 		return
 	}
@@ -318,9 +307,7 @@ func (r *designResource) Delete(ctx context.Context, req resource.DeleteRequest,
 
 	id := state.ID.ValueString()
 
-	_, err := retryOnRateLimit(ctx, func() (interface{}, error) {
-		return nil, r.client.DeleteDesign(ctx, id)
-	})
+	err := r.client.DeleteDesign(ctx, id)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Deleting design",

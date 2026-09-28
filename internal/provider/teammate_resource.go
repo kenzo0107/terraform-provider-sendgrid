@@ -176,23 +176,11 @@ func (r *teammateResource) Create(ctx context.Context, req resource.CreateReques
 		Scopes:  scopes,
 	}
 
-	// NOTE: Re-execute after the re-executable time has elapsed when a rate limit occurs
-	res, err := retryOnRateLimit(ctx, func() (interface{}, error) {
-		return r.client.InviteTeammate(context.TODO(), input)
-	})
+	inviteTeammate, err := r.client.InviteTeammate(context.TODO(), input)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Creating teammate",
 			fmt.Sprintf("Unable to invite teammate, got error: %s", err),
-		)
-		return
-	}
-
-	inviteTeammate, ok := res.(*sendgrid.OutputInviteTeammate)
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Creating teammate",
-			"Failed to assert type *sendgrid.OutputInviteTeammate",
 		)
 		return
 	}
@@ -368,10 +356,8 @@ func (r *teammateResource) Delete(ctx context.Context, req resource.DeleteReques
 
 	email := data.Email.ValueString()
 
-	res, err := retryOnRateLimit(ctx, func() (interface{}, error) {
-		// Invited users are treated as pending users until they set up their profiles.
-		return pendingTeammateByEmail(ctx, r.client, email)
-	})
+	// Invited users are treated as pending users until they set up their profiles.
+	pendingUser, err := pendingTeammateByEmail(ctx, r.client, email)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Deleting teammate",
@@ -380,19 +366,8 @@ func (r *teammateResource) Delete(ctx context.Context, req resource.DeleteReques
 		return
 	}
 
-	pendingUser, ok := res.(*sendgrid.PendingTeammate)
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Deleting teammate",
-			"Failed to assert type *sendgrid.PendingTeammate",
-		)
-		return
-	}
-
 	if pendingUser != nil {
-		_, err = retryOnRateLimit(ctx, func() (interface{}, error) {
-			return nil, r.client.DeletePendingTeammate(ctx, pendingUser.Token)
-		})
+		err = r.client.DeletePendingTeammate(ctx, pendingUser.Token)
 		// If the teammate is in a pending state, execute the API to remove pending teammates.
 		if err != nil {
 			resp.Diagnostics.AddError(
@@ -403,22 +378,11 @@ func (r *teammateResource) Delete(ctx context.Context, req resource.DeleteReques
 		return
 	}
 
-	res, err = retryOnRateLimit(ctx, func() (interface{}, error) {
-		return getTeammateByEmail(ctx, r.client, email)
-	})
+	teammateByEmail, err := getTeammateByEmail(ctx, r.client, email)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Deleting teammate",
 			fmt.Sprintf("Unable to get teammates, got error: %s", err),
-		)
-		return
-	}
-
-	teammateByEmail, ok := res.(*sendgrid.Teammate)
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Deleting teammate",
-			"Failed to assert type *sendgrid.Teammate",
 		)
 		return
 	}
@@ -431,9 +395,7 @@ func (r *teammateResource) Delete(ctx context.Context, req resource.DeleteReques
 		return
 	}
 
-	_, err = retryOnRateLimit(ctx, func() (interface{}, error) {
-		return nil, r.client.DeleteTeammate(ctx, teammateByEmail.Username)
-	})
+	err = r.client.DeleteTeammate(ctx, teammateByEmail.Username)
 
 	if err != nil {
 		resp.Diagnostics.AddError(

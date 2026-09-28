@@ -175,22 +175,11 @@ func (r *templateVersionResource) Create(ctx context.Context, req resource.Creat
 		input.PlainContent = plan.PlainContent.ValueString()
 	}
 
-	res, err := retryOnRateLimit(ctx, func() (interface{}, error) {
-		return r.client.CreateTemplateVersion(ctx, templateID, input)
-	})
+	o, err := r.client.CreateTemplateVersion(ctx, templateID, input)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Creating template version",
 			fmt.Sprintf("Unable to create template version (template id: %s), got error: %s", templateID, err),
-		)
-		return
-	}
-
-	o, ok := res.(*sendgrid.OutputCreateTemplateVersion)
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Creating template version",
-			"Failed to assert type *sendgrid.OutputCreateTemplateVersion",
 		)
 		return
 	}

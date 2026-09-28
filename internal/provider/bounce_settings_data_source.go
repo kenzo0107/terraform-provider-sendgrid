@@ -93,22 +93,11 @@ func (d *bounceSettingsDataSource) Read(ctx context.Context, req datasource.Read
 		return
 	}
 
-	res, err := retryOnRateLimit(ctx, func() (interface{}, error) {
-		return d.client.GetBounceSettings(ctx)
-	})
+	o, err := d.client.GetBounceSettings(ctx)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Reading bounce settings",
 			fmt.Sprintf("Unable to get bounce settings, got error: %s", err),
-		)
-		return
-	}
-
-	o, ok := res.(*sendgrid.OutputGetBounceSettings)
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Reading bounce settings",
-			"Failed to assert type *sendgrid.BounceSettings",
 		)
 		return
 	}

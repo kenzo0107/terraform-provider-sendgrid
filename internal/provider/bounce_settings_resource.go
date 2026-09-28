@@ -102,22 +102,11 @@ func (r *bounceSettingsResource) Create(ctx context.Context, req resource.Create
 		HardBounces: plan.HardBounces.ValueInt64(),
 	}
 
-	res, err := retryOnRateLimit(ctx, func() (interface{}, error) {
-		return r.client.UpdateBounceSettings(ctx, input)
-	})
+	o, err := r.client.UpdateBounceSettings(ctx, input)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Creating bounce settings",
 			fmt.Sprintf("Unable to update bounce settings, got error: %s", err),
-		)
-		return
-	}
-
-	o, ok := res.(*sendgrid.OutputUpdateBounceSettings)
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Creating bounce settings",
-			"Failed to assert type *sendgrid.OutputUpdateBounceSettings",
 		)
 		return
 	}
@@ -140,22 +129,11 @@ func (r *bounceSettingsResource) Read(ctx context.Context, req resource.ReadRequ
 		return
 	}
 
-	res, err := retryOnRateLimit(ctx, func() (interface{}, error) {
-		return r.client.GetBounceSettings(ctx)
-	})
+	o, err := r.client.GetBounceSettings(ctx)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Reading bounce settings",
 			fmt.Sprintf("Unable to read bounce settings, got error: %s", err),
-		)
-		return
-	}
-
-	o, ok := res.(*sendgrid.OutputGetBounceSettings)
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Reading bounce settings",
-			"Failed to assert type *sendgrid.OutputGetBounceSettings",
 		)
 		return
 	}
@@ -184,22 +162,11 @@ func (r *bounceSettingsResource) Update(ctx context.Context, req resource.Update
 		SoftBounces: data.SoftBounces.ValueInt64(),
 		HardBounces: data.HardBounces.ValueInt64(),
 	}
-	res, err := retryOnRateLimit(ctx, func() (interface{}, error) {
-		return r.client.UpdateBounceSettings(ctx, input)
-	})
+	o, err := r.client.UpdateBounceSettings(ctx, input)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Updating bounce settings",
 			fmt.Sprintf("Unable to update bounce settings, got error: %s", err),
-		)
-		return
-	}
-
-	o, ok := res.(*sendgrid.OutputUpdateBounceSettings)
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Updating bounce settings",
-			"Failed to assert type *sendgrid.OutputUpdateBounceSettings",
 		)
 		return
 	}
@@ -227,9 +194,7 @@ func (r *bounceSettingsResource) Delete(ctx context.Context, req resource.Delete
 	input := &sendgrid.InputUpdateBounceSettings{
 		Enabled: false,
 	}
-	_, err := retryOnRateLimit(ctx, func() (interface{}, error) {
-		return r.client.UpdateBounceSettings(ctx, input)
-	})
+	_, err := r.client.UpdateBounceSettings(ctx, input)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Deleting bounce settings",
@@ -242,22 +207,11 @@ func (r *bounceSettingsResource) Delete(ctx context.Context, req resource.Delete
 func (r *bounceSettingsResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	var data bounceSettingsResourceModel
 
-	res, err := retryOnRateLimit(ctx, func() (interface{}, error) {
-		return r.client.GetBounceSettings(ctx)
-	})
+	o, err := r.client.GetBounceSettings(ctx)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Importing bounce settings",
 			fmt.Sprintf("Unable to read bounce settings, got error: %s", err),
-		)
-		return
-	}
-
-	o, ok := res.(*sendgrid.OutputGetBounceSettings)
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Importing bounce settings",
-			"Failed to assert type *sendgrid.OutputGetBounceSettings",
 		)
 		return
 	}

@@ -348,21 +348,12 @@ func (r *ssoTeammateResource) Create(ctx context.Context, req resource.CreateReq
 		Scopes:                     scopes,
 	}
 
-	// NOTE: Re-execute after the re-executable time has elapsed when a rate limit occurs
-	res, err := retryOnRateLimit(ctx, func() (interface{}, error) {
-		return r.client.CreateSSOTeammate(context.TODO(), input)
-	})
+	o, err := r.client.CreateSSOTeammate(context.TODO(), input)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Creating SSO teammate",
 			fmt.Sprintf("Unable to invite SSO teammate, got error: %s", err),
 		)
-		return
-	}
-
-	o, ok := res.(*sendgrid.OutputCreateSSOTeammate)
-	if !ok {
-		resp.Diagnostics.AddError("Creating sso teammate", "Failed to assert type *sendgrid.OutputCreateSSOTeammate")
 		return
 	}
 
@@ -599,9 +590,7 @@ func (r *ssoTeammateResource) Delete(ctx context.Context, req resource.DeleteReq
 
 	email := data.Email.ValueString()
 
-	_, err := retryOnRateLimit(ctx, func() (interface{}, error) {
-		return nil, r.client.DeleteTeammate(ctx, email)
-	})
+	err := r.client.DeleteTeammate(ctx, email)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Deleting SSO teammate",

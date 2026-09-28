@@ -105,22 +105,11 @@ func (r *inboundParseWebhookResource) Create(ctx context.Context, req resource.C
 		SendRaw:   plan.SendRaw.ValueBool(),
 	}
 
-	res, err := retryOnRateLimit(ctx, func() (interface{}, error) {
-		return r.client.CreateInboundParseWebhook(context.TODO(), input)
-	})
+	o, err := r.client.CreateInboundParseWebhook(context.TODO(), input)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Creating inbound parse webhook",
 			fmt.Sprintf("Unable to create inbound parse webhook, got error: %s", err),
-		)
-		return
-	}
-
-	o, ok := res.(*sendgrid.OutputCreateInboundParseWebhook)
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Creating inbound parse webhook",
-			"Failed to assert type *sendgrid.OutputCreateInboundParseWebhook",
 		)
 		return
 	}
@@ -232,9 +221,7 @@ func (r *inboundParseWebhookResource) Delete(ctx context.Context, req resource.D
 	}
 
 	hostname := data.Hostname.ValueString()
-	_, err := retryOnRateLimit(ctx, func() (interface{}, error) {
-		return nil, r.client.DeleteInboundParseWebhook(ctx, hostname)
-	})
+	err := r.client.DeleteInboundParseWebhook(ctx, hostname)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Deleting inbound parse webhook",

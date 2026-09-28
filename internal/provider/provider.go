@@ -203,13 +203,3 @@ func New(version string) func() provider.Provider {
 		}
 	}
 }
-
-// retryOnRateLimit runs f once. Rate-limit retries are handled for every
-// request by the HTTP client built in newHTTPClient, so retrying here as well
-// would multiply the attempts (and the wait) when SendGrid's quota is exhausted.
-//
-// The wrapper is kept so the existing call sites keep compiling; they can be
-// unwrapped over time.
-func retryOnRateLimit(_ context.Context, f func() (interface{}, error)) (interface{}, error) {
-	return f()
-}

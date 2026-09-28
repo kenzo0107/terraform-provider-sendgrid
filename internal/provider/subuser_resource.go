@@ -183,30 +183,18 @@ func (r *subuserResource) Create(ctx context.Context, req resource.CreateRequest
 		password = config.PasswordWO.ValueString()
 	}
 
-	// NOTE: Re-execute after the re-executable time has elapsed when a rate limit occurs
-	res, err := retryOnRateLimit(ctx, func() (interface{}, error) {
-		return r.client.CreateSubuser(ctx, &sendgrid.InputCreateSubuser{
-			Username:      plan.Username.ValueString(),
-			Email:         plan.Email.ValueString(),
-			Password:      password,
-			Ips:           ips,
-			Region:        plan.Region.ValueString(),
-			IncludeRegion: true,
-		})
+	o, err := r.client.CreateSubuser(ctx, &sendgrid.InputCreateSubuser{
+		Username:      plan.Username.ValueString(),
+		Email:         plan.Email.ValueString(),
+		Password:      password,
+		Ips:           ips,
+		Region:        plan.Region.ValueString(),
+		IncludeRegion: true,
 	})
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Creating subuser",
 			fmt.Sprintf("Unable to create subuser, got error: %s", err),
-		)
-		return
-	}
-
-	o, ok := res.(*sendgrid.OutputCreateSubuser)
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Creating subuser",
-			"Failed to assert type *sendgrid.OutputCreateSubuser",
 		)
 		return
 	}
@@ -316,10 +304,7 @@ func (r *subuserResource) Delete(ctx context.Context, req resource.DeleteRequest
 
 	username := state.Username.ValueString()
 
-	// NOTE: Re-execute after the re-executable time has elapsed when a rate limit occurs
-	_, err := retryOnRateLimit(ctx, func() (interface{}, error) {
-		return nil, r.client.DeleteSubuser(ctx, username)
-	})
+	err := r.client.DeleteSubuser(ctx, username)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Deleting subuser",
