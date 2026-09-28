@@ -18,14 +18,16 @@ import (
 // https://www.twilio.com/docs/sendgrid/api-reference/teammates/retrieve-all-teammates
 const teammatesPageLimit = 500
 
-func pendingTeammateByEmail(ctx context.Context, client *sendgrid.Client, email string) (*sendgrid.PendingTeammate, error) {
-	r, err := client.GetPendingTeammates(ctx)
+// pendingTeammateByEmail finds a pending invitation by email, or returns nil
+// when the email has no pending invitation.
+func pendingTeammateByEmail(ctx context.Context, cache *teammateCache, email string) (*sendgrid.PendingTeammate, error) {
+	pending, err := cache.pendingTeammates(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	var pendingTeammate *sendgrid.PendingTeammate
-	for _, t := range r.PendingTeammates {
+	for _, t := range pending {
 		t := &t
 		if email != t.Email {
 			continue
@@ -36,33 +38,19 @@ func pendingTeammateByEmail(ctx context.Context, client *sendgrid.Client, email 
 	return pendingTeammate, nil
 }
 
-func getTeammateByEmail(ctx context.Context, client *sendgrid.Client, email string) (*sendgrid.Teammate, error) {
-	offset := 0
+// getTeammateByEmail finds an accepted teammate by email, or returns nil when
+// no teammate has that email.
+func getTeammateByEmail(ctx context.Context, cache *teammateCache, email string) (*sendgrid.Teammate, error) {
+	teammates, err := cache.allTeammates(ctx)
+	if err != nil {
+		return nil, err
+	}
 
-	for {
-		input := &sendgrid.InputGetTeammates{
-			Limit:  teammatesPageLimit,
-			Offset: offset,
+	for _, t := range teammates {
+		t := &t
+		if email == t.Email {
+			return t, nil
 		}
-
-		r, err := client.GetTeammates(ctx, input)
-		if err != nil {
-			return nil, err
-		}
-
-		for _, t := range r.Teammates {
-			t := &t
-			if email == t.Email {
-				return t, nil
-			}
-		}
-
-		// A short (or empty) page is the last one.
-		if len(r.Teammates) < teammatesPageLimit {
-			break
-		}
-
-		offset += teammatesPageLimit
 	}
 
 	return nil, nil
@@ -75,8 +63,9 @@ func getTeammateByEmail(ctx context.Context, client *sendgrid.Client, email stri
 // on an earlier read) the teammate is fetched directly with
 // GET /v3/teammates/{username}, which costs one request instead of scanning
 // the pending list and the paginated teammate list. The email-based scan is
-// used only when the username is unknown or the direct lookup fails.
-func lookupTeammate(ctx context.Context, client *sendgrid.Client, state teammateResourceModel) (*teammateResourceModel, error) {
+// used only when the username is unknown or the direct lookup fails, and it
+// reads both lists through the per-provider cache.
+func lookupTeammate(ctx context.Context, client *sendgrid.Client, cache *teammateCache, state teammateResourceModel) (*teammateResourceModel, error) {
 	email := state.Email.ValueString()
 
 	if username := state.Username.ValueString(); username != "" {
@@ -100,7 +89,7 @@ func lookupTeammate(ctx context.Context, client *sendgrid.Client, state teammate
 		})
 	}
 
-	pendingTeammate, err := pendingTeammateByEmail(ctx, client, email)
+	pendingTeammate, err := pendingTeammateByEmail(ctx, cache, email)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get pending teammates: %w", err)
 	}
@@ -116,7 +105,7 @@ func lookupTeammate(ctx context.Context, client *sendgrid.Client, state teammate
 		return &m, nil
 	}
 
-	teammateByEmail, err := getTeammateByEmail(ctx, client, email)
+	teammateByEmail, err := getTeammateByEmail(ctx, cache, email)
 	if err != nil {
 		return nil, fmt.Errorf("unable to read teammate (%s): %w", email, err)
 	}

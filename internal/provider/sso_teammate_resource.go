@@ -43,6 +43,9 @@ func newSSOTeammateResource() resource.Resource {
 
 type ssoTeammateResource struct {
 	client *sendgrid.Client
+	// teammates is invalidated after every write because SSO teammates appear
+	// in GET /v3/teammates, which sendgrid_teammate and data.sendgrid_teammate read.
+	teammates *teammateCache
 }
 
 type ssoSubuserAccessResourceModel struct {
@@ -290,18 +293,19 @@ func (r *ssoTeammateResource) Configure(ctx context.Context, req resource.Config
 		return
 	}
 
-	client, ok := req.ProviderData.(*sendgrid.Client)
+	pd, ok := providerDataFrom(req.ProviderData)
 
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *sendgrid.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf("Expected *providerData, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
 
 		return
 	}
 
-	r.client = client
+	r.client = pd.client
+	r.teammates = pd.teammates
 }
 
 func (r *ssoTeammateResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -356,6 +360,7 @@ func (r *ssoTeammateResource) Create(ctx context.Context, req resource.CreateReq
 		)
 		return
 	}
+	r.teammates.invalidate()
 
 	// NOTE: The creation API answers 201 with subuser_access omitted when it discarded the value, so
 	//       an empty response here means the teammate was created without the requested access.
@@ -542,6 +547,7 @@ func (r *ssoTeammateResource) Update(ctx context.Context, req resource.UpdateReq
 		)
 		return
 	}
+	r.teammates.invalidate()
 
 	scopesSet := []types.String{}
 	for _, s := range o.Scopes {
@@ -602,6 +608,7 @@ func (r *ssoTeammateResource) Delete(ctx context.Context, req resource.DeleteReq
 		)
 		return
 	}
+	r.teammates.invalidate()
 }
 
 func (r *ssoTeammateResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

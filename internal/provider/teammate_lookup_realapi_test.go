@@ -54,10 +54,11 @@ func TestLookupTeammate_AcceptedTeammateRealAPI(t *testing.T) {
 	rec := &recordingTransport{next: newHTTPClient().Transport}
 	client := sendgrid.New(apiKey, sendgrid.OptionHTTPClient(&http.Client{Transport: rec}))
 	ctx := context.Background()
+	cache := newTeammateCache(client)
 
 	// First read after import / acceptance: the username is unknown, so the
 	// email-based scan (pending list, teammate list, detail) must discover it.
-	discovered, err := lookupTeammate(ctx, client, teammateResourceModel{Email: types.StringValue(email)})
+	discovered, err := lookupTeammate(ctx, client, cache, teammateResourceModel{Email: types.StringValue(email)})
 	if err != nil {
 		t.Fatalf("lookupTeammate() without username: %v", err)
 	}
@@ -71,7 +72,7 @@ func TestLookupTeammate_AcceptedTeammateRealAPI(t *testing.T) {
 	t.Logf("scan without username: %d requests %v", len(scan), scan)
 
 	// Steady state: the username is in state, so exactly one request is issued.
-	direct, err := lookupTeammate(ctx, client, *discovered)
+	direct, err := lookupTeammate(ctx, client, cache, *discovered)
 	if err != nil {
 		t.Fatalf("lookupTeammate() with username: %v", err)
 	}

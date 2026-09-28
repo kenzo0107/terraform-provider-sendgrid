@@ -40,7 +40,8 @@ func newTeammateResource() resource.Resource {
 }
 
 type teammateResource struct {
-	client *sendgrid.Client
+	client    *sendgrid.Client
+	teammates *teammateCache
 }
 
 type teammateResourceModel struct {
@@ -111,18 +112,19 @@ func (r *teammateResource) Configure(ctx context.Context, req resource.Configure
 		return
 	}
 
-	client, ok := req.ProviderData.(*sendgrid.Client)
+	pd, ok := providerDataFrom(req.ProviderData)
 
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *sendgrid.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf("Expected *providerData, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
 
 		return
 	}
 
-	r.client = client
+	r.client = pd.client
+	r.teammates = pd.teammates
 }
 
 func (r *teammateResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -184,6 +186,7 @@ func (r *teammateResource) Create(ctx context.Context, req resource.CreateReques
 		)
 		return
 	}
+	r.teammates.invalidate()
 
 	scopesSet := []types.String{}
 	if !inviteTeammate.IsAdmin {
@@ -216,7 +219,7 @@ func (r *teammateResource) Read(ctx context.Context, req resource.ReadRequest, r
 		return
 	}
 
-	teammate, err := lookupTeammate(ctx, r.client, data)
+	teammate, err := lookupTeammate(ctx, r.client, r.teammates, data)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Reading teammate",
@@ -257,7 +260,7 @@ func (r *teammateResource) Update(ctx context.Context, req resource.UpdateReques
 
 	email := data.Email.ValueString()
 
-	pendingTeammate, err := pendingTeammateByEmail(ctx, r.client, email)
+	pendingTeammate, err := pendingTeammateByEmail(ctx, r.teammates, email)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Updating teammate",
@@ -320,6 +323,7 @@ func (r *teammateResource) Update(ctx context.Context, req resource.UpdateReques
 		)
 		return
 	}
+	r.teammates.invalidate()
 
 	scopesSet := []types.String{}
 	if !o.IsAdmin {
@@ -357,7 +361,7 @@ func (r *teammateResource) Delete(ctx context.Context, req resource.DeleteReques
 	email := data.Email.ValueString()
 
 	// Invited users are treated as pending users until they set up their profiles.
-	pendingUser, err := pendingTeammateByEmail(ctx, r.client, email)
+	pendingUser, err := pendingTeammateByEmail(ctx, r.teammates, email)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Deleting teammate",
@@ -374,11 +378,13 @@ func (r *teammateResource) Delete(ctx context.Context, req resource.DeleteReques
 				"Deleting teammate",
 				fmt.Sprintf("Unable to delete pending teammate, got error: %s", err),
 			)
+			return
 		}
+		r.teammates.invalidate()
 		return
 	}
 
-	teammateByEmail, err := getTeammateByEmail(ctx, r.client, email)
+	teammateByEmail, err := getTeammateByEmail(ctx, r.teammates, email)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Deleting teammate",
@@ -408,6 +414,7 @@ func (r *teammateResource) Delete(ctx context.Context, req resource.DeleteReques
 		)
 		return
 	}
+	r.teammates.invalidate()
 }
 
 func (r *teammateResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
@@ -415,7 +422,7 @@ func (r *teammateResource) ImportState(ctx context.Context, req resource.ImportS
 
 	resource.ImportStatePassthroughID(ctx, path.Root("email"), req, resp)
 
-	pendingTeammate, err := pendingTeammateByEmail(ctx, r.client, email)
+	pendingTeammate, err := pendingTeammateByEmail(ctx, r.teammates, email)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Importing teammate",
@@ -431,7 +438,7 @@ func (r *teammateResource) ImportState(ctx context.Context, req resource.ImportS
 		return
 	}
 
-	teammateByEmail, err := getTeammateByEmail(ctx, r.client, email)
+	teammateByEmail, err := getTeammateByEmail(ctx, r.teammates, email)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Importing teammate",
