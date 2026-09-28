@@ -228,93 +228,23 @@ func (r *teammateResource) Read(ctx context.Context, req resource.ReadRequest, r
 		return
 	}
 
-	email := data.Email.ValueString()
-
-	pendingTeammate, err := pendingTeammateByEmail(ctx, r.client, email)
+	teammate, err := lookupTeammate(ctx, r.client, data)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Reading teammate",
-			fmt.Sprintf("Unable to get pending teammates, got error: %s", err),
+			fmt.Sprintf("Unable to read teammate (%s), got error: %s", data.Email.ValueString(), err),
 		)
 		return
 	}
 
-	// If the teammate is in a pending state, return their data.
-	if pendingTeammate != nil {
-		scopes := []types.String{}
-		// administorators have all scopes, so we don't need to set them.
-		if !data.IsAdmin.ValueBool() {
-			for _, s := range pendingTeammate.Scopes {
-				if slices.Contains(autoScopes, s) {
-					continue
-				}
-				scopes = append(scopes, types.StringValue(s))
-			}
-		}
-		data = teammateResourceModel{
-			ID:    types.StringValue(pendingTeammate.Email),
-			Email: types.StringValue(pendingTeammate.Email),
-			// NOTE: As per the SendGrid API specifications,
-			//       pending teammates cannot update the administrator flag.
-			//       In such cases, discrepancies arise between the Terraform code and the tfstate,
-			//       leading to errors during the execution of terraform apply.
-			//       For pending teammates, it update the is_admin value in the tfstate to prevent any discrepancies.
-			//       While there might be differences from the actual code,
-			//       not accommodating the above would hinder team member management, making it unavoidable.
-			IsAdmin: data.IsAdmin,
-			Scopes:  scopes,
-		}
-
-		resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
-		return
-	}
-
-	teammateByEmail, err := getTeammateByEmail(ctx, r.client, email)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Reading teammate",
-			fmt.Sprintf("Unable to read teammate (%s), got error: %s", email, err),
-		)
-		return
-	}
-
-	// If you are unable to retrieve your teammate's information using their email address,
+	// If the teammate can be found neither in the pending list nor by email,
 	// it removes the resource information from the state.
-	if teammateByEmail == nil {
+	if teammate == nil {
 		resp.State.RemoveResource(ctx)
 		return
 	}
 
-	o, err := r.client.GetTeammate(ctx, teammateByEmail.Username)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Reading teammate",
-			fmt.Sprintf("Unable to read teammate (username: %s), got error: %s", teammateByEmail.Username, err),
-		)
-		return
-	}
-
-	scopes := []types.String{}
-	// admin users have all scopes, so we don't need to set them.
-	if !o.IsAdmin {
-		for _, s := range o.Scopes {
-			// Automatically assigned scopes in SendGrid are not managed.
-			if slices.Contains(autoScopes, s) {
-				continue
-			}
-			scopes = append(scopes, types.StringValue(s))
-		}
-	}
-
-	data = teammateResourceModel{
-		ID:       types.StringValue(o.Email),
-		Email:    types.StringValue(o.Email),
-		IsAdmin:  types.BoolValue(o.IsAdmin),
-		Username: types.StringValue(o.Username),
-		Scopes:   scopes,
-	}
-
-	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+	resp.Diagnostics.Append(resp.State.Set(ctx, teammate)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -519,8 +449,6 @@ func (r *teammateResource) Delete(ctx context.Context, req resource.DeleteReques
 }
 
 func (r *teammateResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	var data teammateResourceModel
-
 	email := req.ID
 
 	resource.ImportStatePassthroughID(ctx, path.Root("email"), req, resp)
@@ -536,22 +464,7 @@ func (r *teammateResource) ImportState(ctx context.Context, req resource.ImportS
 
 	// If the teammate is in a pending state, return their data.
 	if pendingTeammate != nil {
-		scopes := []types.String{}
-		if !pendingTeammate.IsAdmin {
-			for _, s := range pendingTeammate.Scopes {
-				if slices.Contains(autoScopes, s) {
-					continue
-				}
-				scopes = append(scopes, types.StringValue(s))
-			}
-		}
-		data = teammateResourceModel{
-			ID:      types.StringValue(email),
-			Email:   types.StringValue(email),
-			IsAdmin: types.BoolValue(pendingTeammate.IsAdmin),
-			Scopes:  scopes,
-		}
-
+		data := pendingTeammateModel(pendingTeammate, types.BoolValue(pendingTeammate.IsAdmin))
 		resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 		return
 	}
@@ -582,25 +495,7 @@ func (r *teammateResource) ImportState(ctx context.Context, req resource.ImportS
 		return
 	}
 
-	scopes := []types.String{}
-	if !teammate.IsAdmin {
-		for _, s := range teammate.Scopes {
-			// Automatically assigned scopes in SendGrid are not managed.
-			if slices.Contains(autoScopes, s) {
-				continue
-			}
-			scopes = append(scopes, types.StringValue(s))
-		}
-	}
-
-	data = teammateResourceModel{
-		ID:       types.StringValue(teammate.Email),
-		Email:    types.StringValue(teammate.Email),
-		IsAdmin:  types.BoolValue(teammate.IsAdmin),
-		Username: types.StringValue(teammate.Username),
-		Scopes:   scopes,
-	}
-
+	data := teammateModelFromOutput(teammate)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return

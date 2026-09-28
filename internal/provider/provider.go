@@ -6,7 +6,6 @@ package provider
 import (
 	"context"
 	"os"
-	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -14,7 +13,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/kenzo0107/sendgrid"
 )
 
@@ -43,6 +41,15 @@ func (p *sendgridProvider) Metadata(ctx context.Context, req provider.MetadataRe
 
 func (p *sendgridProvider) Schema(ctx context.Context, req provider.SchemaRequest, resp *provider.SchemaResponse) {
 	resp.Schema = schema.Schema{
+		MarkdownDescription: `
+The SendGrid provider manages resources of a [Twilio SendGrid](https://sendgrid.com/) account.
+
+## Rate limits
+
+Every request is retried automatically when SendGrid answers with HTTP 429. The provider waits until the
+window reported by the ` + "`X-RateLimit-Reset`" + ` header ends (up to 5 retries, at most 60 seconds per wait) before
+failing. Only 429 responses are retried, so a request is never applied twice. Each attempt times out after 60 seconds.
+`,
 		Attributes: map[string]schema.Attribute{
 			"api_key": schema.StringAttribute{
 				MarkdownDescription: "API Key for Sendgrid API. May also be provided via SENDGRID_API_KEY environment variable.",
@@ -116,7 +123,10 @@ func (p *sendgridProvider) Configure(ctx context.Context, req provider.Configure
 		return
 	}
 
-	opts := []sendgrid.Option{}
+	opts := []sendgrid.Option{
+		// Retry 429 responses and reuse connections across Terraform's parallel reads.
+		sendgrid.OptionHTTPClient(newHTTPClient()),
+	}
 	if subuser != "" {
 		opts = append(opts, sendgrid.OptionSubuser(subuser))
 	}
@@ -194,46 +204,12 @@ func New(version string) func() provider.Provider {
 	}
 }
 
-func retryOnRateLimit(ctx context.Context, f func() (interface{}, error)) (resp interface{}, err error) {
-	maxRetries := 5
-	baseDelay := 1 * time.Second
-	maxDelay := 60 * time.Second
-
-	for retry := 0; retry < maxRetries; retry++ {
-		resp, err = f()
-		if err == nil {
-			return resp, nil
-		}
-
-		if rle, ok := err.(*sendgrid.RateLimitedError); ok {
-			var waitTime time.Duration
-			if rle.RetryAfter > 0 {
-				waitTime = rle.RetryAfter
-				waitTime += time.Duration(retry*100) * time.Millisecond
-			} else {
-				waitTime = baseDelay * (1 << uint(retry))
-			}
-
-			if waitTime > maxDelay {
-				waitTime = maxDelay
-			}
-
-			tflog.Info(ctx, "Rate limited, retrying", map[string]interface{}{
-				"retry_attempt": retry + 1,
-				"max_retries":   maxRetries,
-				"wait_seconds":  waitTime.Seconds(),
-			})
-
-			select {
-			case <-ctx.Done():
-				return nil, ctx.Err()
-			case <-time.After(waitTime):
-				continue
-			}
-		}
-
-		return resp, err
-	}
-
-	return resp, err
+// retryOnRateLimit runs f once. Rate-limit retries are handled for every
+// request by the HTTP client built in newHTTPClient, so retrying here as well
+// would multiply the attempts (and the wait) when SendGrid's quota is exhausted.
+//
+// The wrapper is kept so the existing call sites keep compiling; they can be
+// unwrapped over time.
+func retryOnRateLimit(_ context.Context, f func() (interface{}, error)) (interface{}, error) {
+	return f()
 }
