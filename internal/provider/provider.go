@@ -41,6 +41,15 @@ func (p *sendgridProvider) Metadata(ctx context.Context, req provider.MetadataRe
 
 func (p *sendgridProvider) Schema(ctx context.Context, req provider.SchemaRequest, resp *provider.SchemaResponse) {
 	resp.Schema = schema.Schema{
+		MarkdownDescription: `
+The SendGrid provider manages resources of a [Twilio SendGrid](https://sendgrid.com/) account.
+
+## Rate limits
+
+Every request is retried automatically when SendGrid answers with HTTP 429. The provider waits until the
+window reported by the ` + "`X-RateLimit-Reset`" + ` header ends (up to 5 retries, at most 60 seconds per wait) before
+failing. Only 429 responses are retried, so a request is never applied twice. Each attempt times out after 60 seconds.
+`,
 		Attributes: map[string]schema.Attribute{
 			"api_key": schema.StringAttribute{
 				MarkdownDescription: "API Key for Sendgrid API. May also be provided via SENDGRID_API_KEY environment variable.",
