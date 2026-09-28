@@ -173,22 +173,11 @@ func (r *reverseDNSResource) Create(ctx context.Context, req resource.CreateRequ
 		input.Subdomain = plan.Subdomain.ValueString()
 	}
 
-	res, err := retryOnRateLimit(ctx, func() (interface{}, error) {
-		return r.client.CreateReverseDNS(ctx, input)
-	})
+	o, err := r.client.CreateReverseDNS(ctx, input)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Creating reverseDNS",
 			fmt.Sprintf("Unable to create reverseDNS, got error: %s", err),
-		)
-		return
-	}
-
-	o, ok := res.(*sendgrid.OutputCreateReverseDNS)
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Creating reverseDNS",
-			"Failed to assert type *sendgrid.OutputCreateReverseDNS",
 		)
 		return
 	}
@@ -265,9 +254,7 @@ func (r *reverseDNSResource) Delete(ctx context.Context, req resource.DeleteRequ
 	reverseDNSID := state.ID.ValueString()
 	id, _ := strconv.ParseInt(reverseDNSID, 10, 64)
 
-	_, err := retryOnRateLimit(ctx, func() (interface{}, error) {
-		return nil, r.client.DeleteReverseDNS(ctx, id)
-	})
+	err := r.client.DeleteReverseDNS(ctx, id)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Deleting reverseDNS",

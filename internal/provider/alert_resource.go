@@ -120,28 +120,16 @@ func (r *alertResource) Create(ctx context.Context, req resource.CreateRequest, 
 		return
 	}
 
-	// NOTE: Re-execute after the re-executable time has elapsed when a rate limit occurs
-	res, err := retryOnRateLimit(ctx, func() (interface{}, error) {
-		return r.client.CreateAlert(ctx, &sendgrid.InputCreateAlert{
-			EmailTo:    plan.EmailTo.ValueString(),
-			Type:       plan.Type.ValueString(),
-			Frequency:  plan.Frequency.ValueString(),
-			Percentage: plan.Percentage.ValueInt64(),
-		})
+	o, err := r.client.CreateAlert(ctx, &sendgrid.InputCreateAlert{
+		EmailTo:    plan.EmailTo.ValueString(),
+		Type:       plan.Type.ValueString(),
+		Frequency:  plan.Frequency.ValueString(),
+		Percentage: plan.Percentage.ValueInt64(),
 	})
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Creating alert",
 			fmt.Sprintf("Unable to create alert, got error: %s", err),
-		)
-		return
-	}
-
-	o, ok := res.(*sendgrid.OutputCreateAlert)
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Creating alert",
-			"Failed to assert type *sendgrid.OutputCreateAlert",
 		)
 		return
 	}
@@ -265,10 +253,7 @@ func (r *alertResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 		return
 	}
 
-	// NOTE: Re-execute after the re-executable time has elapsed when a rate limit occurs
-	_, err = retryOnRateLimit(ctx, func() (interface{}, error) {
-		return nil, r.client.DeleteAlert(ctx, idInt64)
-	})
+	err = r.client.DeleteAlert(ctx, idInt64)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Deleting alert",

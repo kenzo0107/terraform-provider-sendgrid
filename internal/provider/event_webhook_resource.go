@@ -227,22 +227,11 @@ func (r *eventWebhookResource) Create(ctx context.Context, req resource.CreateRe
 		input.OAuthTokenURL = plan.OAuthTokenURL.ValueString()
 	}
 
-	res, err := retryOnRateLimit(ctx, func() (interface{}, error) {
-		return r.client.CreateEventWebhook(context.TODO(), input)
-	})
+	o, err := r.client.CreateEventWebhook(context.TODO(), input)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Creating event webhook",
 			fmt.Sprintf("Unable to create event webhook, got error: %s", err),
-		)
-		return
-	}
-
-	o, ok := res.(*sendgrid.OutputCreateEventWebhook)
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Creating event webhook",
-			"Failed to assert type *sendgrid.OutputCreateEventWebhook",
 		)
 		return
 	}
@@ -252,24 +241,13 @@ func (r *eventWebhookResource) Create(ctx context.Context, req resource.CreateRe
 
 	// Handle signature verification if enabled
 	if signed {
-		res, err := retryOnRateLimit(ctx, func() (interface{}, error) {
-			return r.client.ToggleSignatureVerification(ctx, o.ID, &sendgrid.InputToggleSignatureVerification{
-				Enabled: true,
-			})
+		o, err := r.client.ToggleSignatureVerification(ctx, o.ID, &sendgrid.InputToggleSignatureVerification{
+			Enabled: true,
 		})
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Enabling signature verification",
 				fmt.Sprintf("Unable to enable signature verification, got error: %s", err),
-			)
-			return
-		}
-
-		o, ok := res.(*sendgrid.OutputToggleSignatureVerification)
-		if !ok {
-			resp.Diagnostics.AddError(
-				"Enabling signature verification",
-				"Failed to assert type *sendgrid.OutputToggleSignatureVerification",
 			)
 			return
 		}
@@ -403,24 +381,13 @@ func (r *eventWebhookResource) Update(ctx context.Context, req resource.UpdateRe
 
 	// Handle signature verification separately if it has changed
 	if !plan.Signed.Equal(state.Signed) {
-		res, err := retryOnRateLimit(ctx, func() (interface{}, error) {
-			return r.client.ToggleSignatureVerification(ctx, id, &sendgrid.InputToggleSignatureVerification{
-				Enabled: signed,
-			})
+		o, err := r.client.ToggleSignatureVerification(ctx, id, &sendgrid.InputToggleSignatureVerification{
+			Enabled: signed,
 		})
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Updating event webhook signature verification",
 				fmt.Sprintf("Unable to update signature verification, got error: %s", err),
-			)
-			return
-		}
-
-		o, ok := res.(*sendgrid.OutputToggleSignatureVerification)
-		if !ok {
-			resp.Diagnostics.AddError(
-				"Enabling signature verification",
-				"Failed to assert type *sendgrid.OutputToggleSignatureVerification",
 			)
 			return
 		}
@@ -463,9 +430,7 @@ func (r *eventWebhookResource) Delete(ctx context.Context, req resource.DeleteRe
 	}
 
 	id := data.ID.ValueString()
-	_, err := retryOnRateLimit(ctx, func() (interface{}, error) {
-		return nil, r.client.DeleteEventWebhook(ctx, id)
-	})
+	err := r.client.DeleteEventWebhook(ctx, id)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Deleting event webhook",

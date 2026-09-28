@@ -82,24 +82,13 @@ func (r *ipPoolResource) Create(ctx context.Context, req resource.CreateRequest,
 		return
 	}
 
-	res, err := retryOnRateLimit(ctx, func() (interface{}, error) {
-		return r.client.CreateIPPool(ctx, &sendgrid.InputCreateIPPool{
-			Name: plan.Name.ValueString(),
-		})
+	o, err := r.client.CreateIPPool(ctx, &sendgrid.InputCreateIPPool{
+		Name: plan.Name.ValueString(),
 	})
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Creating ip pool",
 			fmt.Sprintf("Unable to create ip pool, got error: %s", err),
-		)
-		return
-	}
-
-	o, ok := res.(*sendgrid.OutputCreateIPPool)
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Creating ip pool",
-			"Failed to assert type *sendgrid.OutputCreateIPPool",
 		)
 		return
 	}
@@ -115,10 +104,8 @@ func (r *ipPoolResource) Create(ctx context.Context, req resource.CreateRequest,
 	}
 
 	for _, ip := range ips {
-		_, err := retryOnRateLimit(ctx, func() (interface{}, error) {
-			return r.client.AddIPToPool(ctx, o.Name, &sendgrid.InputAddIPToPool{
-				IP: ip,
-			})
+		_, err := r.client.AddIPToPool(ctx, o.Name, &sendgrid.InputAddIPToPool{
+			IP: ip,
 		})
 		if err != nil {
 			resp.Diagnostics.AddError(
@@ -207,10 +194,8 @@ func (r *ipPoolResource) Update(ctx context.Context, req resource.UpdateRequest,
 		return
 	}
 	for _, ip := range addIPs {
-		_, err := retryOnRateLimit(ctx, func() (interface{}, error) {
-			return r.client.AddIPToPool(ctx, o.Name, &sendgrid.InputAddIPToPool{
-				IP: ip,
-			})
+		_, err := r.client.AddIPToPool(ctx, o.Name, &sendgrid.InputAddIPToPool{
+			IP: ip,
 		})
 		if err != nil {
 			resp.Diagnostics.AddError(
@@ -221,9 +206,7 @@ func (r *ipPoolResource) Update(ctx context.Context, req resource.UpdateRequest,
 		}
 	}
 	for _, ip := range removeIPs {
-		_, err := retryOnRateLimit(ctx, func() (interface{}, error) {
-			return nil, r.client.RemoveIPFromPool(ctx, o.Name, ip)
-		})
+		err := r.client.RemoveIPFromPool(ctx, o.Name, ip)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Removing IP from pool",
@@ -252,9 +235,7 @@ func (r *ipPoolResource) Delete(ctx context.Context, req resource.DeleteRequest,
 
 	name := state.Name.ValueString()
 
-	_, err := retryOnRateLimit(ctx, func() (interface{}, error) {
-		return nil, r.client.DeleteIPPool(ctx, name)
-	})
+	err := r.client.DeleteIPPool(ctx, name)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Deleting ip pool",
