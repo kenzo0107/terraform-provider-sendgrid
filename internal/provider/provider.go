@@ -27,6 +27,33 @@ type sendgridProvider struct {
 	version string
 }
 
+// providerData is handed to every resource and data source through
+// ConfigureResponse.ResourceData / DataSourceData.
+type providerData struct {
+	client *sendgrid.Client
+	// teammates caches GET /v3/teammates and GET /v3/teammates/pending for the
+	// lifetime of this provider instance. See teammateCache.
+	teammates *teammateCache
+}
+
+// providerDataFrom returns the value set by sendgridProvider.Configure.
+func providerDataFrom(v any) (*providerData, bool) {
+	pd, ok := v.(*providerData)
+	if !ok || pd == nil {
+		return nil, false
+	}
+	return pd, true
+}
+
+// clientFromProviderData returns the SendGrid client set by sendgridProvider.Configure.
+func clientFromProviderData(v any) (*sendgrid.Client, bool) {
+	pd, ok := providerDataFrom(v)
+	if !ok {
+		return nil, false
+	}
+	return pd.client, true
+}
+
 // sendgridProviderModel describes the provider data model.
 type sendgridProviderModel struct {
 	APIKey  types.String `tfsdk:"api_key"`
@@ -138,10 +165,14 @@ func (p *sendgridProvider) Configure(ctx context.Context, req provider.Configure
 
 	client := sendgrid.New(apiKey, opts...)
 
-	// Make the SendGrid api key available during DataSource and Resource
-	// type Configure methods.
-	resp.DataSourceData = client
-	resp.ResourceData = client
+	// Make the SendGrid client (and the per-instance teammate cache) available
+	// during DataSource and Resource type Configure methods.
+	pd := &providerData{
+		client:    client,
+		teammates: newTeammateCache(client),
+	}
+	resp.DataSourceData = pd
+	resp.ResourceData = pd
 }
 
 func (p *sendgridProvider) Resources(ctx context.Context) []func() resource.Resource {
