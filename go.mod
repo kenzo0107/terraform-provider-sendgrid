@@ -1,6 +1,6 @@
 module github.com/kenzo0107/terraform-provider-sendgrid
 
-go 1.25.8
+go 1.26.0
 
 require (
 	github.com/hashicorp/go-retryablehttp v0.7.8
@@ -11,7 +11,7 @@ require (
 	github.com/hashicorp/terraform-plugin-log v0.10.0
 	github.com/hashicorp/terraform-plugin-testing v1.16.0
 	github.com/kenzo0107/sendgrid v1.14.1
-	golang.org/x/sync v0.20.0
+	golang.org/x/sync v0.23.0
 )
 
 require (
