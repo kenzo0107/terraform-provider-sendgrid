@@ -523,6 +523,22 @@ func convertDNSToSetType(dns sendgrid.DNS) (recordsSet basetypes.SetValue) {
 			},
 		))
 	}
+	if dns.DomainSpf.Type != "" {
+		records = append(records, types.ObjectValueMust(
+			map[string]attr.Type{
+				"valid": types.BoolType,
+				"type":  types.StringType,
+				"host":  types.StringType,
+				"data":  types.StringType,
+			},
+			map[string]attr.Value{
+				"valid": types.BoolValue(dns.DomainSpf.Valid),
+				"type":  types.StringValue(dns.DomainSpf.Type),
+				"host":  types.StringValue(dns.DomainSpf.Host),
+				"data":  types.StringValue(dns.DomainSpf.Data),
+			},
+		))
+	}
 	if dns.Dkim.Type != "" {
 		records = append(records, types.ObjectValueMust(
 			map[string]attr.Type{
