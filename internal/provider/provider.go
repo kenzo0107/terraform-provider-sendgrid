@@ -207,6 +207,7 @@ func (p *sendgridProvider) Resources(ctx context.Context) []func() resource.Reso
 		newAlertResource,
 		newDesignResource,
 		newIPPoolResource,
+		newMarketingSenderResource,
 	}
 }
 
@@ -232,6 +233,7 @@ func (p *sendgridProvider) DataSources(ctx context.Context) []func() datasource.
 		newAlertDataSource,
 		newDesignDataSource,
 		newIPPoolDataSource,
+		newMarketingSenderDataSource,
 	}
 }
 
