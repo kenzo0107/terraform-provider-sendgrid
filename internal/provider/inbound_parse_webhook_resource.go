@@ -71,7 +71,7 @@ To begin processing email using SendGrid's Inbound Parse Webhook, you will have 
 				Default:             booldefault.StaticBool(false),
 			},
 			"security_policy": schema.StringAttribute{
-				MarkdownDescription: "The ID of the webhook security policy (`sendgrid_webhook_security_policy`) to attach. Removing this attribute detaches the policy.",
+				MarkdownDescription: "The ID of the webhook security policy (`sendgrid_webhook_security_policy`) to attach. Removing this attribute detaches the policy, including a policy attached outside Terraform. To keep a policy that is managed outside Terraform, add `security_policy` to `lifecycle.ignore_changes`.",
 				Optional:            true,
 			},
 		},
