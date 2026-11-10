@@ -66,3 +66,59 @@ resource "sendgrid_inbound_parse_webhook" "test" {
 }
 `, hostname, url, spamCheck, sendRaw)
 }
+
+func TestAccInboundParseWebhookResource_SecurityPolicy(t *testing.T) {
+	hostname := os.Getenv("INBOUND_PARSE_WEBHOOK_HOSTNAME")
+	if hostname == "" {
+		t.Skip()
+	}
+
+	resourceName := "sendgrid_inbound_parse_webhook.test"
+	url := fmt.Sprintf("https://test-acc-%s.com", acctest.RandString(16))
+	policyName := fmt.Sprintf("test-acc-%s", acctest.RandString(16))
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccInboundParseWebhookResourceSecurityPolicyConfig(hostname, url, policyName, true),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttrPair(resourceName, "security_policy", "sendgrid_webhook_security_policy.test", "id"),
+				),
+			},
+			{
+				ResourceName:                         resourceName,
+				ImportState:                          true,
+				ImportStateId:                        hostname,
+				ImportStateVerify:                    true,
+				ImportStateVerifyIdentifierAttribute: "hostname",
+			},
+			{
+				Config: testAccInboundParseWebhookResourceSecurityPolicyConfig(hostname, url, policyName, false),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckNoResourceAttr(resourceName, "security_policy"),
+				),
+			},
+		},
+	})
+}
+
+func testAccInboundParseWebhookResourceSecurityPolicyConfig(hostname, url, policyName string, attach bool) string {
+	securityPolicy := ""
+	if attach {
+		securityPolicy = "security_policy = sendgrid_webhook_security_policy.test.id"
+	}
+	return fmt.Sprintf(`
+resource "sendgrid_webhook_security_policy" "test" {
+  name              = "%s"
+  signature_enabled = true
+}
+
+resource "sendgrid_inbound_parse_webhook" "test" {
+  hostname = "%s"
+  url      = "%s"
+  %s
+}
+`, policyName, hostname, url, securityPolicy)
+}

@@ -33,6 +33,7 @@ data "sendgrid_inbound_parse_webhook" "example" {
 
 ### Read-Only
 
+- `security_policy` (String) The ID of the webhook security policy attached to this Inbound Parse setting.
 - `send_raw` (Boolean) Indicates if you would like SendGrid to post the original MIME-type content of your parsed email. When this parameter is set to true, SendGrid will send a JSON payload of the content of your email. (Default: `false`)
 - `spam_check` (Boolean) Indicates if you would like SendGrid to check the content parsed from your emails for spam before POSTing them to your domain. (Default: `false`)
 - `url` (String) The public URL where you would like SendGrid to POST the data parsed from your email. Any emails sent with the given hostname provided (whose MX records have been updated to point to SendGrid) will be parsed and POSTed to this URL.
