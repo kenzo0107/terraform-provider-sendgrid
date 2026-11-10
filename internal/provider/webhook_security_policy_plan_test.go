@@ -15,8 +15,10 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
 	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
+	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
 	"github.com/kenzo0107/sendgrid"
 )
 
@@ -25,6 +27,7 @@ const fakePolicyPath = "/user/webhooks/security/policies"
 type fakePolicyAPI struct {
 	mu       sync.Mutex
 	policies map[string]*sendgrid.WebhookSecurityPolicy
+	ids      int
 	keys     int
 	created  []sendgrid.InputCreateWebhookSecurityPolicy
 	updated  []sendgrid.InputUpdateWebhookSecurityPolicy
@@ -55,6 +58,15 @@ func withoutSecret(o *sendgrid.WebhookSecurityPolicyOAuth) *sendgrid.WebhookSecu
 	return &c
 }
 
+func decodeFakeRequest(w http.ResponseWriter, r *http.Request, v any) bool {
+	if err := json.NewDecoder(r.Body).Decode(v); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return false
+	}
+	return true
+}
+
 func (f *fakePolicyAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -64,10 +76,13 @@ func (f *fakePolicyAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case r.Method == http.MethodPost && id == "":
 		var in sendgrid.InputCreateWebhookSecurityPolicy
-		_ = json.NewDecoder(r.Body).Decode(&in)
+		if !decodeFakeRequest(w, r, &in) {
+			return
+		}
 		f.created = append(f.created, in)
+		f.ids++
 		p := &sendgrid.WebhookSecurityPolicy{
-			ID:        fmt.Sprintf("p%d", len(f.policies)+1),
+			ID:        fmt.Sprintf("p%d", f.ids),
 			Name:      in.Name,
 			OAuth:     withoutSecret(in.OAuth),
 			Signature: f.signature(in.Signature),
@@ -78,7 +93,9 @@ func (f *fakePolicyAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(sendgrid.OutputGetWebhookSecurityPolicy{Policy: f.policies[id]})
 	case r.Method == http.MethodPatch && f.policies[id] != nil:
 		var in sendgrid.InputUpdateWebhookSecurityPolicy
-		_ = json.NewDecoder(r.Body).Decode(&in)
+		if !decodeFakeRequest(w, r, &in) {
+			return
+		}
 		f.updated = append(f.updated, in)
 		p := f.policies[id]
 		p.Name = in.Name
@@ -227,7 +244,24 @@ resource "sendgrid_webhook_security_policy" "test" {
 				ImportStateId:      "existing",
 				ImportStatePersist: true,
 				ImportStateCheck: func(states []*terraform.InstanceState) error {
-					if got, ok := states[0].Attributes["oauth.client_secret"]; ok && got != "" {
+					if len(states) != 1 {
+						return fmt.Errorf("imported %d states, want 1", len(states))
+					}
+					attrs := states[0].Attributes
+					want := map[string]string{
+						"id":                   "existing",
+						"name":                 "policy",
+						"oauth.client_id":      "client",
+						"oauth.token_url":      "https://example.com/token",
+						"signature.enabled":    "true",
+						"signature.public_key": "existing-key",
+					}
+					for k, v := range want {
+						if attrs[k] != v {
+							return fmt.Errorf("%s = %q, want %q", k, attrs[k], v)
+						}
+					}
+					if got := attrs["oauth.client_secret"]; got != "" {
 						return fmt.Errorf("oauth.client_secret = %q, want unset after import", got)
 					}
 					return nil
@@ -236,7 +270,10 @@ resource "sendgrid_webhook_security_policy" "test" {
 			{
 				Config: config,
 				ConfigPlanChecks: resource.ConfigPlanChecks{
-					PreApply: []plancheck.PlanCheck{plancheck.ExpectResourceAction(resourceName, plancheck.ResourceActionUpdate)},
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction(resourceName, plancheck.ResourceActionUpdate),
+						plancheck.ExpectKnownValue(resourceName, tfjsonpath.New("signature").AtMapKey("public_key"), knownvalue.StringExact("existing-key")),
+					},
 				},
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "id", "existing"),
