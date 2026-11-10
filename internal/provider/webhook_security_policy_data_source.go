@@ -27,13 +27,16 @@ type webhookSecurityPolicyDataSource struct {
 }
 
 type webhookSecurityPolicyDataSourceModel struct {
-	ID               types.String `tfsdk:"id"`
-	Name             types.String `tfsdk:"name"`
-	OAuthClientID    types.String `tfsdk:"oauth_client_id"`
-	OAuthTokenURL    types.String `tfsdk:"oauth_token_url"`
-	OAuthScopes      types.List   `tfsdk:"oauth_scopes"`
-	SignatureEnabled types.Bool   `tfsdk:"signature_enabled"`
-	PublicKey        types.String `tfsdk:"public_key"`
+	ID        types.String                               `tfsdk:"id"`
+	Name      types.String                               `tfsdk:"name"`
+	Signature *webhookSecurityPolicySignatureModel       `tfsdk:"signature"`
+	OAuth     *webhookSecurityPolicyDataSourceOAuthModel `tfsdk:"oauth"`
+}
+
+type webhookSecurityPolicyDataSourceOAuthModel struct {
+	ClientID types.String `tfsdk:"client_id"`
+	TokenURL types.String `tfsdk:"token_url"`
+	Scopes   types.List   `tfsdk:"scopes"`
 }
 
 func (d *webhookSecurityPolicyDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -69,26 +72,38 @@ func (d *webhookSecurityPolicyDataSource) Schema(_ context.Context, _ datasource
 				MarkdownDescription: "The name of the webhook security policy.",
 				Computed:            true,
 			},
-			"oauth_client_id": schema.StringAttribute{
-				MarkdownDescription: "The OAuth client ID that SendGrid passes to your OAuth server to generate an access token.",
+			"signature": schema.SingleNestedAttribute{
+				MarkdownDescription: "The signature verification (ECDSA) settings.",
 				Computed:            true,
+				Attributes: map[string]schema.Attribute{
+					"enabled": schema.BoolAttribute{
+						MarkdownDescription: "Whether SendGrid signs webhook requests with ECDSA.",
+						Computed:            true,
+					},
+					"public_key": schema.StringAttribute{
+						MarkdownDescription: "The public key to verify the signature of webhook requests.",
+						Computed:            true,
+					},
+				},
 			},
-			"oauth_token_url": schema.StringAttribute{
-				MarkdownDescription: "The URL where SendGrid sends the OAuth client ID and client secret to generate an access token.",
+			"oauth": schema.SingleNestedAttribute{
+				MarkdownDescription: "The OAuth settings. The client secret is not returned by SendGrid.",
 				Computed:            true,
-			},
-			"oauth_scopes": schema.ListAttribute{
-				MarkdownDescription: "The OAuth scopes to request.",
-				ElementType:         types.StringType,
-				Computed:            true,
-			},
-			"signature_enabled": schema.BoolAttribute{
-				MarkdownDescription: "Whether SendGrid signs webhook requests with ECDSA.",
-				Computed:            true,
-			},
-			"public_key": schema.StringAttribute{
-				MarkdownDescription: "The public key to verify the signature of webhook requests.",
-				Computed:            true,
+				Attributes: map[string]schema.Attribute{
+					"client_id": schema.StringAttribute{
+						MarkdownDescription: "The OAuth client ID that SendGrid passes to your OAuth server to generate an access token.",
+						Computed:            true,
+					},
+					"token_url": schema.StringAttribute{
+						MarkdownDescription: "The URL where SendGrid sends the OAuth client ID and client secret to generate an access token.",
+						Computed:            true,
+					},
+					"scopes": schema.ListAttribute{
+						MarkdownDescription: "The OAuth scopes to request.",
+						ElementType:         types.StringType,
+						Computed:            true,
+					},
+				},
 			},
 		},
 	}
@@ -124,13 +139,17 @@ func (d *webhookSecurityPolicyDataSource) Read(ctx context.Context, req datasour
 		return
 	}
 
-	resp.Diagnostics.Append(resp.State.Set(ctx, &webhookSecurityPolicyDataSourceModel{
-		ID:               m.ID,
-		Name:             m.Name,
-		OAuthClientID:    m.OAuthClientID,
-		OAuthTokenURL:    m.OAuthTokenURL,
-		OAuthScopes:      m.OAuthScopes,
-		SignatureEnabled: m.SignatureEnabled,
-		PublicKey:        m.PublicKey,
-	})...)
+	state := webhookSecurityPolicyDataSourceModel{
+		ID:        m.ID,
+		Name:      m.Name,
+		Signature: m.Signature,
+	}
+	if m.OAuth != nil {
+		state.OAuth = &webhookSecurityPolicyDataSourceOAuthModel{
+			ClientID: m.OAuth.ClientID,
+			TokenURL: m.OAuth.TokenURL,
+			Scopes:   m.OAuth.Scopes,
+		}
+	}
+	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }

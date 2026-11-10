@@ -9,6 +9,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/objectplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -53,11 +54,11 @@ func requiresReplaceIfStateNotNullInt64() planmodifier.Int64 {
 	)
 }
 
-// requiresReplaceIfRemovedString returns a plan modifier that requires
-// resource replacement only when a value that was set is removed.
-func requiresReplaceIfRemovedString() planmodifier.String {
-	return stringplanmodifier.RequiresReplaceIf(
-		func(_ context.Context, req planmodifier.StringRequest, resp *stringplanmodifier.RequiresReplaceIfFuncResponse) {
+// requiresReplaceIfRemovedObject returns a plan modifier that requires
+// resource replacement only when an object that was set is removed.
+func requiresReplaceIfRemovedObject() planmodifier.Object {
+	return objectplanmodifier.RequiresReplaceIf(
+		func(_ context.Context, req planmodifier.ObjectRequest, resp *objectplanmodifier.RequiresReplaceIfFuncResponse) {
 			resp.RequiresReplace = !req.StateValue.IsNull() && req.PlanValue.IsNull()
 		},
 		"If this attribute is removed after it has been set, Terraform will destroy and recreate the resource.",
@@ -65,8 +66,8 @@ func requiresReplaceIfRemovedString() planmodifier.String {
 	)
 }
 
-// useStateForUnknownIfSignatureUnchanged keeps public_key from the prior state
-// while signature_enabled stays the same.
+// useStateForUnknownIfSignatureUnchanged keeps signature.public_key from the
+// prior state while signature.enabled stays the same.
 func useStateForUnknownIfSignatureUnchanged() planmodifier.String {
 	return useStateForUnknownIfSignatureUnchangedModifier{}
 }
@@ -74,7 +75,7 @@ func useStateForUnknownIfSignatureUnchanged() planmodifier.String {
 type useStateForUnknownIfSignatureUnchangedModifier struct{}
 
 func (m useStateForUnknownIfSignatureUnchangedModifier) Description(_ context.Context) string {
-	return "Keeps the prior public key unless signature_enabled changes."
+	return "Keeps the prior public key unless signature.enabled changes."
 }
 
 func (m useStateForUnknownIfSignatureUnchangedModifier) MarkdownDescription(ctx context.Context) string {
@@ -86,9 +87,10 @@ func (m useStateForUnknownIfSignatureUnchangedModifier) PlanModifyString(ctx con
 		return
 	}
 
+	enabledPath := path.Root("signature").AtName("enabled")
 	var planEnabled, stateEnabled types.Bool
-	resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, path.Root("signature_enabled"), &planEnabled)...)
-	resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("signature_enabled"), &stateEnabled)...)
+	resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, enabledPath, &planEnabled)...)
+	resp.Diagnostics.Append(req.State.GetAttribute(ctx, enabledPath, &stateEnabled)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -99,7 +101,7 @@ func (m useStateForUnknownIfSignatureUnchangedModifier) PlanModifyString(ctx con
 }
 
 // requiresReplaceIfRemovedList is the list counterpart of
-// requiresReplaceIfRemovedString.
+// requiresReplaceIfRemovedObject.
 func requiresReplaceIfRemovedList() planmodifier.List {
 	return listplanmodifier.RequiresReplaceIf(
 		func(_ context.Context, req planmodifier.ListRequest, resp *listplanmodifier.RequiresReplaceIfFuncResponse) {

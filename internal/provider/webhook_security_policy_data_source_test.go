@@ -24,7 +24,9 @@ func TestAccWebhookSecurityPolicyDataSource(t *testing.T) {
 				Config: fmt.Sprintf(`
 resource "sendgrid_webhook_security_policy" "test" {
   name              = "%s"
-  signature_enabled = true
+  signature = {
+    enabled = true
+  }
 }
 
 data "sendgrid_webhook_security_policy" "test" {
@@ -34,8 +36,8 @@ data "sendgrid_webhook_security_policy" "test" {
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttrPair(dataSourceName, "id", resourceName, "id"),
 					resource.TestCheckResourceAttr(dataSourceName, "name", name),
-					resource.TestCheckResourceAttr(dataSourceName, "signature_enabled", "true"),
-					resource.TestCheckResourceAttrPair(dataSourceName, "public_key", resourceName, "public_key"),
+					resource.TestCheckResourceAttr(dataSourceName, "signature.enabled", "true"),
+					resource.TestCheckResourceAttrPair(dataSourceName, "signature.public_key", resourceName, "signature.public_key"),
 				),
 			},
 		},

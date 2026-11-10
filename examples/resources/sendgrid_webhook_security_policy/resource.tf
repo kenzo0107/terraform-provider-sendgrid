@@ -4,13 +4,18 @@ variable "oauth_client_secret" {
 }
 
 resource "sendgrid_webhook_security_policy" "example" {
-  name              = "inbound-parse"
-  signature_enabled = true
+  name = "inbound-parse"
 
-  oauth_client_id     = "client-id"
-  oauth_client_secret = var.oauth_client_secret
-  oauth_token_url     = "https://example.com/oauth/token"
-  oauth_scopes        = ["webhooks:write"]
+  signature = {
+    enabled = true
+  }
+
+  oauth = {
+    client_id     = "client-id"
+    client_secret = var.oauth_client_secret
+    token_url     = "https://example.com/oauth/token"
+    scopes        = ["webhooks:write"]
+  }
 
   lifecycle {
     create_before_destroy = true

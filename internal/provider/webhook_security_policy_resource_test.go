@@ -27,11 +27,11 @@ func TestAccWebhookSecurityPolicyResource(t *testing.T) {
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttrSet(resourceName, "id"),
 					resource.TestCheckResourceAttr(resourceName, "name", name),
-					resource.TestCheckResourceAttr(resourceName, "oauth_client_id", "test-acc-client"),
-					resource.TestCheckResourceAttr(resourceName, "oauth_token_url", "https://example.com/token"),
-					resource.TestCheckResourceAttr(resourceName, "oauth_scopes.#", "1"),
-					resource.TestCheckResourceAttr(resourceName, "signature_enabled", "true"),
-					resource.TestCheckResourceAttrWith(resourceName, "public_key", func(v string) error {
+					resource.TestCheckResourceAttr(resourceName, "oauth.client_id", "test-acc-client"),
+					resource.TestCheckResourceAttr(resourceName, "oauth.token_url", "https://example.com/token"),
+					resource.TestCheckResourceAttr(resourceName, "oauth.scopes.#", "1"),
+					resource.TestCheckResourceAttr(resourceName, "signature.enabled", "true"),
+					resource.TestCheckResourceAttrWith(resourceName, "signature.public_key", func(v string) error {
 						if v == "" {
 							return fmt.Errorf("public_key is empty")
 						}
@@ -44,14 +44,14 @@ func TestAccWebhookSecurityPolicyResource(t *testing.T) {
 				ResourceName:            resourceName,
 				ImportState:             true,
 				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"oauth_client_secret"},
+				ImportStateVerifyIgnore: []string{"oauth.client_secret"},
 			},
 			{
 				Config: testAccWebhookSecurityPolicyResourceConfig(renamedName, "https://example.com/token", "webhooks:read", true),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "name", renamedName),
-					resource.TestCheckResourceAttr(resourceName, "signature_enabled", "true"),
-					resource.TestCheckResourceAttrWith(resourceName, "public_key", func(v string) error {
+					resource.TestCheckResourceAttr(resourceName, "signature.enabled", "true"),
+					resource.TestCheckResourceAttrWith(resourceName, "signature.public_key", func(v string) error {
 						if v != publicKey {
 							return fmt.Errorf("public_key changed on rename: %q -> %q", publicKey, v)
 						}
@@ -63,23 +63,41 @@ func TestAccWebhookSecurityPolicyResource(t *testing.T) {
 				Config: testAccWebhookSecurityPolicyResourceConfig(updatedName, "https://example.com/token", "webhooks:read", false),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "name", updatedName),
-					resource.TestCheckResourceAttr(resourceName, "oauth_client_id", "test-acc-client"),
-					resource.TestCheckResourceAttr(resourceName, "signature_enabled", "false"),
-					resource.TestCheckNoResourceAttr(resourceName, "public_key"),
+					resource.TestCheckResourceAttr(resourceName, "oauth.client_id", "test-acc-client"),
+					resource.TestCheckResourceAttr(resourceName, "signature.enabled", "false"),
+					resource.TestCheckNoResourceAttr(resourceName, "signature.public_key"),
 				),
 			},
 			{
 				Config: testAccWebhookSecurityPolicyResourceConfig(updatedName, "https://example.com/token2", "webhooks:write", false),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr(resourceName, "oauth_token_url", "https://example.com/token2"),
-					resource.TestCheckResourceAttr(resourceName, "oauth_scopes.0", "webhooks:write"),
+					resource.TestCheckResourceAttr(resourceName, "oauth.token_url", "https://example.com/token2"),
+					resource.TestCheckResourceAttr(resourceName, "oauth.scopes.0", "webhooks:write"),
 				),
 			},
 			{
 				Config: testAccWebhookSecurityPolicyResourceConfig(updatedName, "https://example.com/token2", "webhooks:write", true),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr(resourceName, "signature_enabled", "true"),
-					resource.TestCheckResourceAttrSet(resourceName, "public_key"),
+					resource.TestCheckResourceAttr(resourceName, "signature.enabled", "true"),
+					resource.TestCheckResourceAttrSet(resourceName, "signature.public_key"),
+				),
+			},
+			{
+				Config: fmt.Sprintf(`
+resource "sendgrid_webhook_security_policy" "test" {
+  name = "%s"
+
+  oauth = {
+    client_id     = "test-acc-client"
+    client_secret = "test-acc-secret"
+    token_url     = "https://example.com/token2"
+    scopes        = ["webhooks:write"]
+  }
+}
+`, updatedName),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "signature.enabled", "false"),
+					resource.TestCheckNoResourceAttr(resourceName, "signature.public_key"),
 				),
 			},
 		},
@@ -89,12 +107,18 @@ func TestAccWebhookSecurityPolicyResource(t *testing.T) {
 func testAccWebhookSecurityPolicyResourceConfig(name, tokenURL, scope string, signatureEnabled bool) string {
 	return fmt.Sprintf(`
 resource "sendgrid_webhook_security_policy" "test" {
-  name                = "%s"
-  oauth_client_id     = "test-acc-client"
-  oauth_client_secret = "test-acc-secret"
-  oauth_token_url     = "%s"
-  oauth_scopes        = ["%s"]
-  signature_enabled   = %t
+  name = "%s"
+
+  oauth = {
+    client_id     = "test-acc-client"
+    client_secret = "test-acc-secret"
+    token_url     = "%s"
+    scopes        = ["%s"]
+  }
+
+  signature = {
+    enabled = %t
+  }
 }
 `, name, tokenURL, scope, signatureEnabled)
 }

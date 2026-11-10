@@ -28,8 +28,23 @@ data "sendgrid_webhook_security_policy" "example" {
 ### Read-Only
 
 - `name` (String) The name of the webhook security policy.
-- `oauth_client_id` (String) The OAuth client ID that SendGrid passes to your OAuth server to generate an access token.
-- `oauth_scopes` (List of String) The OAuth scopes to request.
-- `oauth_token_url` (String) The URL where SendGrid sends the OAuth client ID and client secret to generate an access token.
+- `oauth` (Attributes) The OAuth settings. The client secret is not returned by SendGrid. (see [below for nested schema](#nestedatt--oauth))
+- `signature` (Attributes) The signature verification (ECDSA) settings. (see [below for nested schema](#nestedatt--signature))
+
+<a id="nestedatt--oauth"></a>
+### Nested Schema for `oauth`
+
+Read-Only:
+
+- `client_id` (String) The OAuth client ID that SendGrid passes to your OAuth server to generate an access token.
+- `scopes` (List of String) The OAuth scopes to request.
+- `token_url` (String) The URL where SendGrid sends the OAuth client ID and client secret to generate an access token.
+
+
+<a id="nestedatt--signature"></a>
+### Nested Schema for `signature`
+
+Read-Only:
+
+- `enabled` (Boolean) Whether SendGrid signs webhook requests with ECDSA.
 - `public_key` (String) The public key to verify the signature of webhook requests.
-- `signature_enabled` (Boolean) Whether SendGrid signs webhook requests with ECDSA.

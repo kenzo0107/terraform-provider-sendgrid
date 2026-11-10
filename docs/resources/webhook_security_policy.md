@@ -25,13 +25,18 @@ variable "oauth_client_secret" {
 }
 
 resource "sendgrid_webhook_security_policy" "example" {
-  name              = "inbound-parse"
-  signature_enabled = true
+  name = "inbound-parse"
 
-  oauth_client_id     = "client-id"
-  oauth_client_secret = var.oauth_client_secret
-  oauth_token_url     = "https://example.com/oauth/token"
-  oauth_scopes        = ["webhooks:write"]
+  signature = {
+    enabled = true
+  }
+
+  oauth = {
+    client_id     = "client-id"
+    client_secret = var.oauth_client_secret
+    token_url     = "https://example.com/oauth/token"
+    scopes        = ["webhooks:write"]
+  }
 
   lifecycle {
     create_before_destroy = true
@@ -54,16 +59,37 @@ resource "sendgrid_inbound_parse_webhook" "example" {
 
 ### Optional
 
-- `oauth_client_id` (String) The OAuth client ID that SendGrid passes to your OAuth server to generate an access token. Removing the OAuth settings recreates the policy, which also issues a new signature key pair.
-- `oauth_client_secret` (String, Sensitive) The OAuth client secret that SendGrid passes to your OAuth server. SendGrid does not return this value, so changes made outside Terraform are not detected.
-- `oauth_scopes` (List of String) The OAuth scopes to request. Removing this attribute recreates the policy.
-- `oauth_token_url` (String) The URL where SendGrid sends the OAuth client ID and client secret to generate an access token.
-- `signature_enabled` (Boolean) Whether SendGrid signs webhook requests with ECDSA. Changing this updates the policy in place. Enabling it issues a new key pair. (Default: `false`)
+- `oauth` (Attributes) The OAuth settings. Removing this attribute recreates the policy, which also issues a new signature key pair. (see [below for nested schema](#nestedatt--oauth))
+- `signature` (Attributes) The signature verification (ECDSA) settings. (Default: `{ enabled = false }`) (see [below for nested schema](#nestedatt--signature))
 
 ### Read-Only
 
 - `id` (String) The ID of the webhook security policy.
-- `public_key` (String) The public key to verify the signature of webhook requests. Set only when `signature_enabled` is `true`.
+
+<a id="nestedatt--oauth"></a>
+### Nested Schema for `oauth`
+
+Required:
+
+- `client_id` (String) The OAuth client ID that SendGrid passes to your OAuth server to generate an access token.
+- `client_secret` (String, Sensitive) The OAuth client secret that SendGrid passes to your OAuth server. SendGrid does not return this value, so changes made outside Terraform are not detected.
+- `token_url` (String) The URL where SendGrid sends the OAuth client ID and client secret to generate an access token.
+
+Optional:
+
+- `scopes` (List of String) The OAuth scopes to request. Removing this attribute recreates the policy.
+
+
+<a id="nestedatt--signature"></a>
+### Nested Schema for `signature`
+
+Required:
+
+- `enabled` (Boolean) Whether SendGrid signs webhook requests with ECDSA. Changing this updates the policy in place. Enabling it issues a new key pair.
+
+Read-Only:
+
+- `public_key` (String) The public key to verify the signature of webhook requests. Set only when `enabled` is `true`.
 
 ## Import
 

@@ -155,14 +155,18 @@ func testAccInboundParseWebhookResourceReplacePolicyConfig(hostname, url, policy
 	oauth := ""
 	if withOAuth {
 		oauth = `
-  oauth_client_id     = "test-acc-client"
-  oauth_client_secret = "test-acc-secret"
-  oauth_token_url     = "https://example.com/token"`
+  oauth = {
+    client_id     = "test-acc-client"
+    client_secret = "test-acc-secret"
+    token_url     = "https://example.com/token"
+  }`
 	}
 	return fmt.Sprintf(`
 resource "sendgrid_webhook_security_policy" "test" {
   name              = "%s"
-  signature_enabled = true
+  signature = {
+    enabled = true
+  }
 %s
 
   lifecycle {
@@ -186,7 +190,9 @@ func testAccInboundParseWebhookResourceSecurityPolicyConfig(hostname, url, polic
 	return fmt.Sprintf(`
 resource "sendgrid_webhook_security_policy" "test" {
   name              = "%s"
-  signature_enabled = true
+  signature = {
+    enabled = true
+  }
 }
 
 resource "sendgrid_inbound_parse_webhook" "test" {

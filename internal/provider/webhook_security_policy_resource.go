@@ -10,12 +10,12 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
-	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/objectdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
@@ -35,14 +35,27 @@ type webhookSecurityPolicyResource struct {
 }
 
 type webhookSecurityPolicyResourceModel struct {
-	ID                types.String `tfsdk:"id"`
-	Name              types.String `tfsdk:"name"`
-	OAuthClientID     types.String `tfsdk:"oauth_client_id"`
-	OAuthClientSecret types.String `tfsdk:"oauth_client_secret"`
-	OAuthTokenURL     types.String `tfsdk:"oauth_token_url"`
-	OAuthScopes       types.List   `tfsdk:"oauth_scopes"`
-	SignatureEnabled  types.Bool   `tfsdk:"signature_enabled"`
-	PublicKey         types.String `tfsdk:"public_key"`
+	ID        types.String                         `tfsdk:"id"`
+	Name      types.String                         `tfsdk:"name"`
+	Signature *webhookSecurityPolicySignatureModel `tfsdk:"signature"`
+	OAuth     *webhookSecurityPolicyOAuthModel     `tfsdk:"oauth"`
+}
+
+type webhookSecurityPolicySignatureModel struct {
+	Enabled   types.Bool   `tfsdk:"enabled"`
+	PublicKey types.String `tfsdk:"public_key"`
+}
+
+type webhookSecurityPolicyOAuthModel struct {
+	ClientID     types.String `tfsdk:"client_id"`
+	ClientSecret types.String `tfsdk:"client_secret"`
+	TokenURL     types.String `tfsdk:"token_url"`
+	Scopes       types.List   `tfsdk:"scopes"`
+}
+
+var webhookSecurityPolicySignatureAttrTypes = map[string]attr.Type{
+	"enabled":    types.BoolType,
+	"public_key": types.StringType,
 }
 
 func (r *webhookSecurityPolicyResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -50,17 +63,6 @@ func (r *webhookSecurityPolicyResource) Metadata(ctx context.Context, req resour
 }
 
 func (r *webhookSecurityPolicyResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
-	oauthAttrs := []string{"oauth_client_id", "oauth_client_secret", "oauth_token_url"}
-	alsoRequires := func(self string) validator.String {
-		var others []path.Expression
-		for _, a := range oauthAttrs {
-			if a != self {
-				others = append(others, path.MatchRoot(a))
-			}
-		}
-		return stringvalidator.AlsoRequires(others...)
-	}
-
 	resp.Schema = schema.Schema{
 		MarkdownDescription: `
 Provides a webhook security policy. A policy can enable signature verification (ECDSA) and OAuth for webhooks such as the Inbound Parse Webhook.
@@ -81,48 +83,59 @@ SendGrid rejects deleting a policy that is still attached to an Inbound Parse se
 				MarkdownDescription: "The name of the webhook security policy.",
 				Required:            true,
 			},
-			"oauth_client_id": schema.StringAttribute{
-				MarkdownDescription: "The OAuth client ID that SendGrid passes to your OAuth server to generate an access token. Removing the OAuth settings recreates the policy, which also issues a new signature key pair.",
-				Optional:            true,
-				Validators:          []validator.String{alsoRequires("oauth_client_id")},
-				PlanModifiers: []planmodifier.String{
-					requiresReplaceIfRemovedString(),
-				},
-			},
-			"oauth_client_secret": schema.StringAttribute{
-				MarkdownDescription: "The OAuth client secret that SendGrid passes to your OAuth server. SendGrid does not return this value, so changes made outside Terraform are not detected.",
-				Optional:            true,
-				Sensitive:           true,
-				Validators:          []validator.String{alsoRequires("oauth_client_secret")},
-			},
-			"oauth_token_url": schema.StringAttribute{
-				MarkdownDescription: "The URL where SendGrid sends the OAuth client ID and client secret to generate an access token.",
-				Optional:            true,
-				Validators:          []validator.String{alsoRequires("oauth_token_url")},
-			},
-			"oauth_scopes": schema.ListAttribute{
-				MarkdownDescription: "The OAuth scopes to request. Removing this attribute recreates the policy.",
-				ElementType:         types.StringType,
-				Optional:            true,
-				Validators: []validator.List{
-					listvalidator.SizeAtLeast(1),
-					listvalidator.AlsoRequires(path.MatchRoot("oauth_client_id")),
-				},
-				PlanModifiers: []planmodifier.List{
-					requiresReplaceIfRemovedList(),
-				},
-			},
-			"signature_enabled": schema.BoolAttribute{
-				MarkdownDescription: "Whether SendGrid signs webhook requests with ECDSA. Changing this updates the policy in place. Enabling it issues a new key pair. (Default: `false`)",
+			"signature": schema.SingleNestedAttribute{
+				MarkdownDescription: "The signature verification (ECDSA) settings. (Default: `{ enabled = false }`)",
 				Optional:            true,
 				Computed:            true,
-				Default:             booldefault.StaticBool(false),
+				Default: objectdefault.StaticValue(types.ObjectValueMust(webhookSecurityPolicySignatureAttrTypes, map[string]attr.Value{
+					"enabled":    types.BoolValue(false),
+					"public_key": types.StringNull(),
+				})),
+				Attributes: map[string]schema.Attribute{
+					"enabled": schema.BoolAttribute{
+						MarkdownDescription: "Whether SendGrid signs webhook requests with ECDSA. Changing this updates the policy in place. Enabling it issues a new key pair.",
+						Required:            true,
+					},
+					"public_key": schema.StringAttribute{
+						MarkdownDescription: "The public key to verify the signature of webhook requests. Set only when `enabled` is `true`.",
+						Computed:            true,
+						PlanModifiers: []planmodifier.String{
+							useStateForUnknownIfSignatureUnchanged(),
+						},
+					},
+				},
 			},
-			"public_key": schema.StringAttribute{
-				MarkdownDescription: "The public key to verify the signature of webhook requests. Set only when `signature_enabled` is `true`.",
-				Computed:            true,
-				PlanModifiers: []planmodifier.String{
-					useStateForUnknownIfSignatureUnchanged(),
+			"oauth": schema.SingleNestedAttribute{
+				MarkdownDescription: "The OAuth settings. Removing this attribute recreates the policy, which also issues a new signature key pair.",
+				Optional:            true,
+				PlanModifiers: []planmodifier.Object{
+					requiresReplaceIfRemovedObject(),
+				},
+				Attributes: map[string]schema.Attribute{
+					"client_id": schema.StringAttribute{
+						MarkdownDescription: "The OAuth client ID that SendGrid passes to your OAuth server to generate an access token.",
+						Required:            true,
+					},
+					"client_secret": schema.StringAttribute{
+						MarkdownDescription: "The OAuth client secret that SendGrid passes to your OAuth server. SendGrid does not return this value, so changes made outside Terraform are not detected.",
+						Required:            true,
+						Sensitive:           true,
+					},
+					"token_url": schema.StringAttribute{
+						MarkdownDescription: "The URL where SendGrid sends the OAuth client ID and client secret to generate an access token.",
+						Required:            true,
+					},
+					"scopes": schema.ListAttribute{
+						MarkdownDescription: "The OAuth scopes to request. Removing this attribute recreates the policy.",
+						ElementType:         types.StringType,
+						Optional:            true,
+						Validators: []validator.List{
+							listvalidator.SizeAtLeast(1),
+						},
+						PlanModifiers: []planmodifier.List{
+							requiresReplaceIfRemovedList(),
+						},
+					},
 				},
 			},
 		},
@@ -153,7 +166,7 @@ func (r *webhookSecurityPolicyResource) Create(ctx context.Context, req resource
 		return
 	}
 
-	oauth, diags := webhookSecurityPolicyOAuthFromModel(ctx, plan)
+	oauth, diags := webhookSecurityPolicyOAuthFromModel(ctx, plan.OAuth)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -163,7 +176,7 @@ func (r *webhookSecurityPolicyResource) Create(ctx context.Context, req resource
 		Name:  plan.Name.ValueString(),
 		OAuth: oauth,
 	}
-	if plan.SignatureEnabled.ValueBool() {
+	if plan.Signature.Enabled.ValueBool() {
 		input.Signature = &sendgrid.WebhookSecurityPolicySignature{Enabled: true}
 	}
 
@@ -185,7 +198,7 @@ func (r *webhookSecurityPolicyResource) Create(ctx context.Context, req resource
 
 	r.waitForPolicy(ctx, o.Policy.ID, o.Policy)
 
-	state, diags := webhookSecurityPolicyModelFromAPI(ctx, o.Policy, plan.OAuthClientSecret)
+	state, diags := webhookSecurityPolicyModelFromAPI(ctx, o.Policy, oauthClientSecret(plan.OAuth))
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -214,7 +227,7 @@ func (r *webhookSecurityPolicyResource) Read(ctx context.Context, req resource.R
 		return
 	}
 
-	newState, diags := webhookSecurityPolicyModelFromAPI(ctx, o.Policy, state.OAuthClientSecret)
+	newState, diags := webhookSecurityPolicyModelFromAPI(ctx, o.Policy, oauthClientSecret(state.OAuth))
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -230,7 +243,7 @@ func (r *webhookSecurityPolicyResource) Update(ctx context.Context, req resource
 		return
 	}
 
-	oauth, diags := webhookSecurityPolicyOAuthFromModel(ctx, plan)
+	oauth, diags := webhookSecurityPolicyOAuthFromModel(ctx, plan.OAuth)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -242,8 +255,8 @@ func (r *webhookSecurityPolicyResource) Update(ctx context.Context, req resource
 	}
 	// Sending enabled: true while the signature is already enabled is avoided,
 	// because it is not known whether the API keeps the current key pair.
-	if !plan.SignatureEnabled.Equal(state.SignatureEnabled) {
-		input.Signature = &sendgrid.WebhookSecurityPolicySignature{Enabled: plan.SignatureEnabled.ValueBool()}
+	if !plan.Signature.Enabled.Equal(state.Signature.Enabled) {
+		input.Signature = &sendgrid.WebhookSecurityPolicySignature{Enabled: plan.Signature.Enabled.ValueBool()}
 	}
 
 	id := state.ID.ValueString()
@@ -267,7 +280,7 @@ func (r *webhookSecurityPolicyResource) Update(ctx context.Context, req resource
 	// old values for a few seconds, and the next refresh would show a false diff.
 	r.waitForPolicy(ctx, id, o.Policy)
 
-	newState, diags := webhookSecurityPolicyModelFromAPI(ctx, o.Policy, plan.OAuthClientSecret)
+	newState, diags := webhookSecurityPolicyModelFromAPI(ctx, o.Policy, oauthClientSecret(plan.OAuth))
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -330,47 +343,55 @@ func (r *webhookSecurityPolicyResource) ImportState(ctx context.Context, req res
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }
 
-func webhookSecurityPolicyOAuthFromModel(ctx context.Context, m webhookSecurityPolicyResourceModel) (*sendgrid.WebhookSecurityPolicyOAuth, diag.Diagnostics) {
-	if m.OAuthClientID.IsNull() {
+func webhookSecurityPolicyOAuthFromModel(ctx context.Context, m *webhookSecurityPolicyOAuthModel) (*sendgrid.WebhookSecurityPolicyOAuth, diag.Diagnostics) {
+	if m == nil {
 		return nil, nil
 	}
 
 	oauth := &sendgrid.WebhookSecurityPolicyOAuth{
-		ClientID:     m.OAuthClientID.ValueString(),
-		ClientSecret: m.OAuthClientSecret.ValueString(),
-		TokenURL:     m.OAuthTokenURL.ValueString(),
+		ClientID:     m.ClientID.ValueString(),
+		ClientSecret: m.ClientSecret.ValueString(),
+		TokenURL:     m.TokenURL.ValueString(),
 	}
 	var diags diag.Diagnostics
-	if !m.OAuthScopes.IsNull() {
-		diags = m.OAuthScopes.ElementsAs(ctx, &oauth.Scopes, false)
+	if !m.Scopes.IsNull() {
+		diags = m.Scopes.ElementsAs(ctx, &oauth.Scopes, false)
 	}
 	return oauth, diags
+}
+
+func oauthClientSecret(m *webhookSecurityPolicyOAuthModel) types.String {
+	if m == nil {
+		return types.StringNull()
+	}
+	return m.ClientSecret
 }
 
 // The client secret is taken from the caller instead of p, because the API never returns it.
 func webhookSecurityPolicyModelFromAPI(ctx context.Context, p *sendgrid.WebhookSecurityPolicy, clientSecret types.String) (webhookSecurityPolicyResourceModel, diag.Diagnostics) {
 	m := webhookSecurityPolicyResourceModel{
-		ID:                types.StringValue(p.ID),
-		Name:              types.StringValue(p.Name),
-		OAuthClientID:     types.StringNull(),
-		OAuthClientSecret: types.StringNull(),
-		OAuthTokenURL:     types.StringNull(),
-		OAuthScopes:       types.ListNull(types.StringType),
-		SignatureEnabled:  types.BoolValue(p.Signature != nil),
-		PublicKey:         types.StringNull(),
+		ID:   types.StringValue(p.ID),
+		Name: types.StringValue(p.Name),
+		Signature: &webhookSecurityPolicySignatureModel{
+			Enabled:   types.BoolValue(p.Signature != nil),
+			PublicKey: types.StringNull(),
+		},
+	}
+	if p.Signature != nil {
+		m.Signature.PublicKey = types.StringValue(p.Signature.PublicKey)
 	}
 
 	var diags diag.Diagnostics
 	if p.OAuth != nil {
-		m.OAuthClientID = types.StringValue(p.OAuth.ClientID)
-		m.OAuthClientSecret = clientSecret
-		m.OAuthTokenURL = types.StringValue(p.OAuth.TokenURL)
-		if len(p.OAuth.Scopes) > 0 {
-			m.OAuthScopes, diags = types.ListValueFrom(ctx, types.StringType, p.OAuth.Scopes)
+		m.OAuth = &webhookSecurityPolicyOAuthModel{
+			ClientID:     types.StringValue(p.OAuth.ClientID),
+			ClientSecret: clientSecret,
+			TokenURL:     types.StringValue(p.OAuth.TokenURL),
+			Scopes:       types.ListNull(types.StringType),
 		}
-	}
-	if p.Signature != nil {
-		m.PublicKey = types.StringValue(p.Signature.PublicKey)
+		if len(p.OAuth.Scopes) > 0 {
+			m.OAuth.Scopes, diags = types.ListValueFrom(ctx, types.StringType, p.OAuth.Scopes)
+		}
 	}
 	return m, diags
 }

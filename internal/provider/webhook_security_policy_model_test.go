@@ -7,6 +7,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
@@ -64,26 +65,29 @@ func TestWebhookSecurityPolicyModelFromAPI(t *testing.T) {
 			t.Fatal(diags)
 		}
 
-		var scopes []string
-		m.OAuthScopes.ElementsAs(ctx, &scopes, false)
-		if m.ID.ValueString() != "p1" || m.Name.ValueString() != "policy" ||
-			m.OAuthClientID.ValueString() != "client" || m.OAuthClientSecret.ValueString() != "secret" ||
-			m.OAuthTokenURL.ValueString() != "https://example.com/token" || len(scopes) != 2 ||
-			!m.SignatureEnabled.ValueBool() || m.PublicKey.ValueString() != "key" {
+		if m.ID.ValueString() != "p1" || m.Name.ValueString() != "policy" {
 			t.Fatalf("unexpected model: %+v", m)
+		}
+		if !m.Signature.Enabled.ValueBool() || m.Signature.PublicKey.ValueString() != "key" {
+			t.Fatalf("unexpected signature: %+v", m.Signature)
+		}
+		var scopes []string
+		m.OAuth.Scopes.ElementsAs(ctx, &scopes, false)
+		if m.OAuth.ClientID.ValueString() != "client" || m.OAuth.ClientSecret.ValueString() != "secret" ||
+			m.OAuth.TokenURL.ValueString() != "https://example.com/token" || len(scopes) != 2 {
+			t.Fatalf("unexpected oauth: %+v", m.OAuth)
 		}
 	})
 
-	t.Run("no oauth and no signature map to null", func(t *testing.T) {
+	t.Run("no oauth and no signature map to null oauth and a disabled signature", func(t *testing.T) {
 		t.Parallel()
 
 		m, diags := webhookSecurityPolicyModelFromAPI(ctx, &sendgrid.WebhookSecurityPolicy{ID: "p1", Name: "policy"}, types.StringValue("secret"))
 		if diags.HasError() {
 			t.Fatal(diags)
 		}
-		if !m.OAuthClientID.IsNull() || !m.OAuthClientSecret.IsNull() || !m.OAuthTokenURL.IsNull() ||
-			!m.OAuthScopes.IsNull() || m.SignatureEnabled.ValueBool() || !m.PublicKey.IsNull() {
-			t.Fatalf("unexpected model: %+v", m)
+		if m.OAuth != nil || m.Signature.Enabled.ValueBool() || !m.Signature.PublicKey.IsNull() {
+			t.Fatalf("unexpected model: oauth=%+v signature=%+v", m.OAuth, m.Signature)
 		}
 	})
 }
@@ -92,22 +96,17 @@ func TestWebhookSecurityPolicyOAuthFromModel(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 
-	got, diags := webhookSecurityPolicyOAuthFromModel(ctx, webhookSecurityPolicyResourceModel{
-		OAuthClientID:     types.StringNull(),
-		OAuthClientSecret: types.StringNull(),
-		OAuthTokenURL:     types.StringNull(),
-		OAuthScopes:       types.ListNull(types.StringType),
-	})
+	got, diags := webhookSecurityPolicyOAuthFromModel(ctx, nil)
 	if diags.HasError() || got != nil {
 		t.Fatalf("no oauth: got %+v, %v", got, diags)
 	}
 
 	scopes, _ := types.ListValueFrom(ctx, types.StringType, []string{"a"})
-	got, diags = webhookSecurityPolicyOAuthFromModel(ctx, webhookSecurityPolicyResourceModel{
-		OAuthClientID:     types.StringValue("client"),
-		OAuthClientSecret: types.StringValue("secret"),
-		OAuthTokenURL:     types.StringValue("https://example.com/token"),
-		OAuthScopes:       scopes,
+	got, diags = webhookSecurityPolicyOAuthFromModel(ctx, &webhookSecurityPolicyOAuthModel{
+		ClientID:     types.StringValue("client"),
+		ClientSecret: types.StringValue("secret"),
+		TokenURL:     types.StringValue("https://example.com/token"),
+		Scopes:       scopes,
 	})
 	if diags.HasError() || got == nil || got.ClientID != "client" || got.ClientSecret != "secret" ||
 		got.TokenURL != "https://example.com/token" || len(got.Scopes) != 1 || got.Scopes[0] != "a" {
@@ -115,33 +114,39 @@ func TestWebhookSecurityPolicyOAuthFromModel(t *testing.T) {
 	}
 }
 
-func TestRequiresReplaceIfRemovedString(t *testing.T) {
+func TestRequiresReplaceIfRemovedObject(t *testing.T) {
 	t.Parallel()
 
+	attrTypes := map[string]attr.Type{"client_id": types.StringType}
+	object := func(clientID string) types.Object {
+		return types.ObjectValueMust(attrTypes, map[string]attr.Value{"client_id": types.StringValue(clientID)})
+	}
+	null := types.ObjectNull(attrTypes)
+
 	tests := map[string]struct {
-		state, plan types.String
+		state, plan types.Object
 		want        bool
 	}{
-		"removed replaces":     {types.StringValue("a"), types.StringNull(), true},
-		"changed updates":      {types.StringValue("a"), types.StringValue("b"), false},
-		"added updates":        {types.StringNull(), types.StringValue("a"), false},
-		"unchanged is no diff": {types.StringValue("a"), types.StringValue("a"), false},
+		"removed replaces":     {object("a"), null, true},
+		"changed updates":      {object("a"), object("b"), false},
+		"added updates":        {null, object("a"), false},
+		"unchanged is no diff": {object("a"), object("a"), false},
 	}
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			req := planmodifier.StringRequest{
-				Path:       path.Root("oauth_client_id"),
+			req := planmodifier.ObjectRequest{
+				Path:       path.Root("oauth"),
 				StateValue: tc.state,
 				PlanValue:  tc.plan,
 				State:      tfsdk.State{Raw: fakeRawState(t)},
 				Plan:       tfsdk.Plan{Raw: fakeRawState(t)},
 			}
-			resp := &planmodifier.StringResponse{PlanValue: tc.plan}
+			resp := &planmodifier.ObjectResponse{PlanValue: tc.plan}
 
-			requiresReplaceIfRemovedString().PlanModifyString(context.Background(), req, resp)
+			requiresReplaceIfRemovedObject().PlanModifyObject(context.Background(), req, resp)
 
 			if resp.RequiresReplace != tc.want {
 				t.Fatalf("RequiresReplace = %v, want %v", resp.RequiresReplace, tc.want)
@@ -160,14 +165,9 @@ func TestUseStateForUnknownIfSignatureUnchanged(t *testing.T) {
 
 	model := func(enabled bool, publicKey types.String) webhookSecurityPolicyResourceModel {
 		return webhookSecurityPolicyResourceModel{
-			ID:                types.StringValue("p1"),
-			Name:              types.StringValue("policy"),
-			OAuthClientID:     types.StringNull(),
-			OAuthClientSecret: types.StringNull(),
-			OAuthTokenURL:     types.StringNull(),
-			OAuthScopes:       types.ListNull(types.StringType),
-			SignatureEnabled:  types.BoolValue(enabled),
-			PublicKey:         publicKey,
+			ID:        types.StringValue("p1"),
+			Name:      types.StringValue("policy"),
+			Signature: &webhookSecurityPolicySignatureModel{Enabled: types.BoolValue(enabled), PublicKey: publicKey},
 		}
 	}
 
@@ -200,7 +200,7 @@ func TestUseStateForUnknownIfSignatureUnchanged(t *testing.T) {
 			}
 
 			req := planmodifier.StringRequest{
-				Path:       path.Root("public_key"),
+				Path:       path.Root("signature").AtName("public_key"),
 				StateValue: stateKey,
 				PlanValue:  types.StringUnknown(),
 				State:      state,
