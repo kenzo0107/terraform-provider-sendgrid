@@ -11,6 +11,10 @@ resource "sendgrid_webhook_security_policy" "example" {
   oauth_client_secret = var.oauth_client_secret
   oauth_token_url     = "https://example.com/oauth/token"
   oauth_scopes        = ["webhooks:write"]
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 resource "sendgrid_inbound_parse_webhook" "example" {

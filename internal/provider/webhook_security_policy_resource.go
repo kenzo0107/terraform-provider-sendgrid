@@ -66,6 +66,8 @@ func (r *webhookSecurityPolicyResource) Schema(ctx context.Context, req resource
 Provides a webhook security policy. A policy can enable signature verification (ECDSA) and OAuth for webhooks such as the Inbound Parse Webhook.
 
 Attach a policy to an Inbound Parse setting with the ` + "`security_policy`" + ` attribute of ` + "`sendgrid_inbound_parse_webhook`" + `. One policy can be attached to several Inbound Parse settings.
+
+SendGrid rejects deleting a policy that is still attached to an Inbound Parse setting. When an attached policy is recreated (for example, by removing its OAuth settings), set ` + "`create_before_destroy = true`" + ` in its ` + "`lifecycle`" + ` block so that the Inbound Parse settings move to the new policy before the old one is deleted.
 		`,
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
@@ -180,6 +182,8 @@ func (r *webhookSecurityPolicyResource) Create(ctx context.Context, req resource
 		)
 		return
 	}
+
+	r.waitForPolicy(ctx, o.Policy.ID, o.Policy)
 
 	state, diags := webhookSecurityPolicyModelFromAPI(ctx, o.Policy, plan.OAuthClientSecret)
 	resp.Diagnostics.Append(diags...)
