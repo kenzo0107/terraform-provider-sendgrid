@@ -183,9 +183,10 @@ func (r *inboundParseWebhookResource) Read(ctx context.Context, req resource.Rea
 		SecurityPolicy: securityPolicyStateValue(len(managed) > 0, o.SecurityPolicy),
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
+	// Not left to Update alone: a policy detached outside Terraform while
+	// security_policy is removed from the configuration gives no diff, so no
+	// Update runs and the marker would stay.
+	resp.Diagnostics.Append(resp.Private.SetKey(ctx, securityPolicyManagedKey, securityPolicyManagedMarker(state.SecurityPolicy))...)
 }
 
 func (r *inboundParseWebhookResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {

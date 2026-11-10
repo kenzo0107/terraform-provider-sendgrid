@@ -34,6 +34,12 @@ func (f *fakeParseSettingsAPI) attachOutsideTerraform(policyID string) {
 	f.setting["security_policy"] = policyID
 }
 
+func (f *fakeParseSettingsAPI) detachOutsideTerraform() {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	delete(f.setting, "security_policy")
+}
+
 func (f *fakeParseSettingsAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -144,6 +150,58 @@ resource "sendgrid_inbound_parse_webhook" "test" {
 	defer api.mu.Unlock()
 	if len(api.patchedPolicy) != 2 || api.patchedPolicy[0] != "p1" || api.patchedPolicy[1] != nil {
 		t.Errorf("security_policy sent in PATCH = %v, want [p1 <nil>]", api.patchedPolicy)
+	}
+}
+
+func TestInboundParseWebhookResource_DetachedOutsideTerraformStopsManagingSecurityPolicy(t *testing.T) {
+	api := &fakeParseSettingsAPI{}
+	srv := httptest.NewServer(api)
+	t.Cleanup(srv.Close)
+
+	client := sendgrid.New("dummy", sendgrid.OptionBaseURL(srv.URL))
+	factories := map[string]func() (tfprotov6.ProviderServer, error){
+		"sendgrid": providerserver.NewProtocol6WithError(&fakeAPIProvider{sendgridProvider: sendgridProvider{version: "test"}, client: client}),
+	}
+	config := func(securityPolicy string) string {
+		c := `
+resource "sendgrid_inbound_parse_webhook" "test" {
+  hostname = "parse.example.com"
+  url      = "https://example.com/inbound"
+`
+		if securityPolicy != "" {
+			c += `  security_policy = "` + securityPolicy + `"
+`
+		}
+		return c + "}\n"
+	}
+	resourceName := "sendgrid_inbound_parse_webhook.test"
+	emptyPlan := resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}
+
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories,
+		Steps: []resource.TestStep{
+			{
+				Config: config("p1"),
+				Check:  resource.TestCheckResourceAttr(resourceName, "security_policy", "p1"),
+			},
+			{
+				PreConfig:        api.detachOutsideTerraform,
+				Config:           config(""),
+				ConfigPlanChecks: emptyPlan,
+			},
+			{
+				PreConfig:        func() { api.attachOutsideTerraform("external-policy") },
+				Config:           config(""),
+				ConfigPlanChecks: emptyPlan,
+				Check:            resource.TestCheckNoResourceAttr(resourceName, "security_policy"),
+			},
+		},
+	})
+
+	api.mu.Lock()
+	defer api.mu.Unlock()
+	if len(api.patchedPolicy) != 0 {
+		t.Errorf("security_policy sent in PATCH = %v, want none", api.patchedPolicy)
 	}
 }
 
