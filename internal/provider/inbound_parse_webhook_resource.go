@@ -71,7 +71,7 @@ To begin processing email using SendGrid's Inbound Parse Webhook, you will have 
 				Default:             booldefault.StaticBool(false),
 			},
 			"security_policy": schema.StringAttribute{
-				MarkdownDescription: "The ID of the webhook security policy (`sendgrid_webhook_security_policy`) to attach. Removing this attribute detaches the policy. While this attribute has never been set (including after an import), a policy attached outside Terraform is left as is and is not shown in the state.",
+				MarkdownDescription: "The ID of the webhook security policy (`sendgrid_webhook_security_policy`) to attach. Removing this attribute detaches the policy.",
 				Optional:            true,
 			},
 		},
@@ -148,18 +148,14 @@ func (r *inboundParseWebhookResource) Create(ctx context.Context, req resource.C
 		SecurityPolicy: plan.SecurityPolicy,
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
-	resp.Diagnostics.Append(resp.Private.SetKey(ctx, securityPolicyManagedKey, securityPolicyManagedMarker(plan.SecurityPolicy))...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 }
 
 func (r *inboundParseWebhookResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var state inboundParseWebhookResourceModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	managed, diags := req.Private.GetKey(ctx, securityPolicyManagedKey)
-	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -180,7 +176,7 @@ func (r *inboundParseWebhookResource) Read(ctx context.Context, req resource.Rea
 		SpamCheck: types.BoolValue(o.SpamCheck),
 		SendRaw:   types.BoolValue(o.SendRaw),
 
-		SecurityPolicy: securityPolicyStateValue(len(managed) > 0, o.SecurityPolicy),
+		SecurityPolicy: stringValueOrNull(o.SecurityPolicy),
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
@@ -224,10 +220,12 @@ func (r *inboundParseWebhookResource) Update(ctx context.Context, req resource.U
 		SpamCheck: types.BoolValue(o.SpamCheck),
 		SendRaw:   types.BoolValue(o.SendRaw),
 
-		SecurityPolicy: plan.SecurityPolicy,
+		SecurityPolicy: stringValueOrNull(o.SecurityPolicy),
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
-	resp.Diagnostics.Append(resp.Private.SetKey(ctx, securityPolicyManagedKey, securityPolicyManagedMarker(plan.SecurityPolicy))...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 }
 
 func (r *inboundParseWebhookResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
@@ -268,7 +266,7 @@ func (r *inboundParseWebhookResource) ImportState(ctx context.Context, req resou
 		SpamCheck: types.BoolValue(o.SpamCheck),
 		SendRaw:   types.BoolValue(o.SendRaw),
 
-		SecurityPolicy: types.StringNull(),
+		SecurityPolicy: stringValueOrNull(o.SecurityPolicy),
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &d)...)
 	if resp.Diagnostics.HasError() {
@@ -295,24 +293,4 @@ func stringValueOrNull(s string) types.String {
 		return types.StringNull()
 	}
 	return types.StringValue(s)
-}
-
-// The prior state cannot tell a removed security_policy from one that was
-// never set, so private state records whether the configuration manages it.
-const securityPolicyManagedKey = "security_policy_managed"
-
-func securityPolicyManagedMarker(plan types.String) []byte {
-	if plan.IsNull() {
-		return nil
-	}
-	return []byte("true")
-}
-
-// A policy attached outside Terraform stays null in state, instead of showing
-// a plan to detach it, until the configuration sets security_policy.
-func securityPolicyStateValue(managed bool, apiValue string) types.String {
-	if !managed {
-		return types.StringNull()
-	}
-	return stringValueOrNull(apiValue)
 }

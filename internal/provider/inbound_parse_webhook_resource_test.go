@@ -93,7 +93,6 @@ func TestAccInboundParseWebhookResource_SecurityPolicy(t *testing.T) {
 				ImportStateId:                        hostname,
 				ImportStateVerify:                    true,
 				ImportStateVerifyIdentifierAttribute: "hostname",
-				ImportStateVerifyIgnore:              []string{"security_policy"},
 			},
 			{
 				Config: testAccInboundParseWebhookResourceSecurityPolicyConfig(hostname, url, policyName, false),
