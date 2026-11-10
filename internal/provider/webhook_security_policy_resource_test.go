@@ -14,7 +14,9 @@ import (
 func TestAccWebhookSecurityPolicyResource(t *testing.T) {
 	resourceName := "sendgrid_webhook_security_policy.test"
 	name := fmt.Sprintf("test-acc-%s", acctest.RandString(16))
+	renamedName := name + "-renamed"
 	updatedName := name + "-updated"
+	var publicKey string
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -29,7 +31,13 @@ func TestAccWebhookSecurityPolicyResource(t *testing.T) {
 					resource.TestCheckResourceAttr(resourceName, "oauth_token_url", "https://example.com/token"),
 					resource.TestCheckResourceAttr(resourceName, "oauth_scopes.#", "1"),
 					resource.TestCheckResourceAttr(resourceName, "signature_enabled", "true"),
-					resource.TestCheckResourceAttrSet(resourceName, "public_key"),
+					resource.TestCheckResourceAttrWith(resourceName, "public_key", func(v string) error {
+						if v == "" {
+							return fmt.Errorf("public_key is empty")
+						}
+						publicKey = v
+						return nil
+					}),
 				),
 			},
 			{
@@ -37,6 +45,19 @@ func TestAccWebhookSecurityPolicyResource(t *testing.T) {
 				ImportState:             true,
 				ImportStateVerify:       true,
 				ImportStateVerifyIgnore: []string{"oauth_client_secret"},
+			},
+			{
+				Config: testAccWebhookSecurityPolicyResourceConfig(renamedName, "https://example.com/token", "webhooks:read", true),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "name", renamedName),
+					resource.TestCheckResourceAttr(resourceName, "signature_enabled", "true"),
+					resource.TestCheckResourceAttrWith(resourceName, "public_key", func(v string) error {
+						if v != publicKey {
+							return fmt.Errorf("public_key changed on rename: %q -> %q", publicKey, v)
+						}
+						return nil
+					}),
+				),
 			},
 			{
 				Config: testAccWebhookSecurityPolicyResourceConfig(updatedName, "https://example.com/token", "webhooks:read", false),
