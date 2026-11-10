@@ -29,6 +29,8 @@ type inboundParseWebhookDataSourceModel struct {
 	URL       types.String `tfsdk:"url"`
 	SpamCheck types.Bool   `tfsdk:"spam_check"`
 	SendRaw   types.Bool   `tfsdk:"send_raw"`
+
+	SecurityPolicy types.String `tfsdk:"security_policy"`
 }
 
 func (d *inboundParseWebhookDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -79,6 +81,10 @@ To begin processing email using SendGrid's Inbound Parse Webhook, you will have 
 				MarkdownDescription: "Indicates if you would like SendGrid to post the original MIME-type content of your parsed email. When this parameter is set to true, SendGrid will send a JSON payload of the content of your email. (Default: `false`)",
 				Computed:            true,
 			},
+			"security_policy": schema.StringAttribute{
+				MarkdownDescription: "The ID of the webhook security policy attached to this Inbound Parse setting.",
+				Computed:            true,
+			},
 		},
 	}
 }
@@ -107,6 +113,8 @@ func (d *inboundParseWebhookDataSource) Read(ctx context.Context, req datasource
 		URL:       types.StringValue(o.URL),
 		SpamCheck: types.BoolValue(o.SpamCheck),
 		SendRaw:   types.BoolValue(o.SendRaw),
+
+		SecurityPolicy: stringValueOrNull(o.SecurityPolicy),
 	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &u)...)

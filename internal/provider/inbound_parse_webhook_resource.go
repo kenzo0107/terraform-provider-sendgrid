@@ -32,6 +32,8 @@ type inboundParseWebhookResourceModel struct {
 	URL       types.String `tfsdk:"url"`
 	SpamCheck types.Bool   `tfsdk:"spam_check"`
 	SendRaw   types.Bool   `tfsdk:"send_raw"`
+
+	SecurityPolicy types.String `tfsdk:"security_policy"`
 }
 
 func (r *inboundParseWebhookResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -68,6 +70,10 @@ To begin processing email using SendGrid's Inbound Parse Webhook, you will have 
 				Computed:            true,
 				Default:             booldefault.StaticBool(false),
 			},
+			"security_policy": schema.StringAttribute{
+				MarkdownDescription: "The ID of the webhook security policy (`sendgrid_webhook_security_policy`) to attach. Removing this attribute detaches the policy. While this attribute has never been set, a policy attached outside Terraform is left as is and is not shown in the state. After an import, an attached policy is managed like a set attribute.",
+				Optional:            true,
+			},
 		},
 	}
 }
@@ -103,6 +109,8 @@ func (r *inboundParseWebhookResource) Create(ctx context.Context, req resource.C
 		URL:       plan.URL.ValueString(),
 		SpamCheck: plan.SpamCheck.ValueBool(),
 		SendRaw:   plan.SendRaw.ValueBool(),
+
+		SecurityPolicy: plan.SecurityPolicy.ValueString(),
 	}
 
 	o, err := r.client.CreateInboundParseWebhook(context.TODO(), input)
@@ -136,16 +144,22 @@ func (r *inboundParseWebhookResource) Create(ctx context.Context, req resource.C
 		//       The API documentation specifies that a URL be returned, but the implementation seems to be different.
 		//       see: https://docs.sendgrid.com/api-reference/settings-inbound-parse/create-a-parse-setting
 		URL: plan.URL,
+
+		SecurityPolicy: plan.SecurityPolicy,
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
+	resp.Diagnostics.Append(resp.Private.SetKey(ctx, securityPolicyManagedKey, securityPolicyManagedMarker(plan.SecurityPolicy))...)
 }
 
 func (r *inboundParseWebhookResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var state inboundParseWebhookResourceModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	managed, diags := req.Private.GetKey(ctx, securityPolicyManagedKey)
+	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -165,11 +179,14 @@ func (r *inboundParseWebhookResource) Read(ctx context.Context, req resource.Rea
 		URL:       types.StringValue(o.URL),
 		SpamCheck: types.BoolValue(o.SpamCheck),
 		SendRaw:   types.BoolValue(o.SendRaw),
+
+		SecurityPolicy: securityPolicyStateValue(len(managed) > 0, o.SecurityPolicy),
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
+	// Not left to Update alone: a policy detached outside Terraform while
+	// security_policy is removed from the configuration gives no diff, so no
+	// Update runs and the marker would stay.
+	resp.Diagnostics.Append(resp.Private.SetKey(ctx, securityPolicyManagedKey, securityPolicyManagedMarker(state.SecurityPolicy))...)
 }
 
 func (r *inboundParseWebhookResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
@@ -190,6 +207,7 @@ func (r *inboundParseWebhookResource) Update(ctx context.Context, req resource.U
 	if !plan.SendRaw.IsNull() {
 		input.SendRaw = plan.SendRaw.ValueBool()
 	}
+	input.SecurityPolicy = securityPolicyUpdateValue(plan.SecurityPolicy, state.SecurityPolicy)
 
 	hostname := state.Hostname.ValueString()
 	o, err := r.client.UpdateInboundParseWebhook(ctx, hostname, input)
@@ -206,11 +224,11 @@ func (r *inboundParseWebhookResource) Update(ctx context.Context, req resource.U
 		URL:       types.StringValue(o.URL),
 		SpamCheck: types.BoolValue(o.SpamCheck),
 		SendRaw:   types.BoolValue(o.SendRaw),
+
+		SecurityPolicy: plan.SecurityPolicy,
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
+	resp.Diagnostics.Append(resp.Private.SetKey(ctx, securityPolicyManagedKey, securityPolicyManagedMarker(plan.SecurityPolicy))...)
 }
 
 func (r *inboundParseWebhookResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
@@ -250,9 +268,51 @@ func (r *inboundParseWebhookResource) ImportState(ctx context.Context, req resou
 		URL:       types.StringValue(o.URL),
 		SpamCheck: types.BoolValue(o.SpamCheck),
 		SendRaw:   types.BoolValue(o.SendRaw),
+
+		SecurityPolicy: stringValueOrNull(o.SecurityPolicy),
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &d)...)
-	if resp.Diagnostics.HasError() {
-		return
+	resp.Diagnostics.Append(resp.Private.SetKey(ctx, securityPolicyManagedKey, securityPolicyManagedMarker(d.SecurityPolicy))...)
+}
+
+// securityPolicyUpdateValue returns nil to leave the policy unchanged, and
+// String("") to detach it, which the client sends as null.
+func securityPolicyUpdateValue(plan, state types.String) *string {
+	switch {
+	case !plan.IsNull():
+		return sendgrid.String(plan.ValueString())
+	case !state.IsNull():
+		return sendgrid.String("")
+	default:
+		return nil
 	}
+}
+
+// The API omits security_policy when no policy is attached, which maps to null.
+func stringValueOrNull(s string) types.String {
+	if s == "" {
+		return types.StringNull()
+	}
+	return types.StringValue(s)
+}
+
+// The prior state cannot tell a removed security_policy from one that was
+// never set, so private state records whether the configuration manages it.
+const securityPolicyManagedKey = "security_policy_managed"
+
+func securityPolicyManagedMarker(plan types.String) []byte {
+	if plan.IsNull() {
+		return nil
+	}
+	return []byte("true")
+}
+
+// A policy attached outside Terraform stays null in state, instead of showing
+// a plan to detach it, until the configuration sets security_policy or the
+// resource is imported.
+func securityPolicyStateValue(managed bool, apiValue string) types.String {
+	if !managed {
+		return types.StringNull()
+	}
+	return stringValueOrNull(apiValue)
 }

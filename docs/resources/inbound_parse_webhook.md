@@ -37,6 +37,7 @@ resource "sendgrid_inbound_parse_webhook" "example" {
 
 ### Optional
 
+- `security_policy` (String) The ID of the webhook security policy (`sendgrid_webhook_security_policy`) to attach. Removing this attribute detaches the policy. While this attribute has never been set, a policy attached outside Terraform is left as is and is not shown in the state. After an import, an attached policy is managed like a set attribute.
 - `send_raw` (Boolean) Indicates if you would like SendGrid to post the original MIME-type content of your parsed email. When this parameter is set to true, SendGrid will send a JSON payload of the content of your email. (Default: `false`)
 - `spam_check` (Boolean) Indicates if you would like SendGrid to check the content parsed from your emails for spam before POSTing them to your domain. (Default: `false`)
 
