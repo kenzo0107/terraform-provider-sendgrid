@@ -25,6 +25,7 @@ import (
 
 var _ resource.Resource = &webhookSecurityPolicyResource{}
 var _ resource.ResourceWithImportState = &webhookSecurityPolicyResource{}
+var _ resource.ResourceWithValidateConfig = &webhookSecurityPolicyResource{}
 
 func newWebhookSecurityPolicyResource() resource.Resource {
 	return &webhookSecurityPolicyResource{}
@@ -139,6 +140,24 @@ SendGrid rejects deleting a policy that is still attached to an Inbound Parse se
 				},
 			},
 		},
+	}
+}
+
+func (r *webhookSecurityPolicyResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+	var oauth types.Object
+	var enabled types.Bool
+	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("oauth"), &oauth)...)
+	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("signature").AtName("enabled"), &enabled)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	if oauth.IsNull() && !enabled.IsUnknown() && !enabled.ValueBool() {
+		resp.Diagnostics.AddAttributeError(
+			path.Root("oauth"),
+			"Missing webhook security policy settings",
+			"SendGrid requires at least one of oauth or signature. Set oauth, or set signature.enabled to true.",
+		)
 	}
 }
 
