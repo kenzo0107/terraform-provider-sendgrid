@@ -40,9 +40,10 @@ resource "sendgrid_api_key" "example" {
 
 The following Scopes are set automatically by SendGrid, so they cannot be set manually:
 
-- sender_verification_exempt
-- sender_verification_eligible
+- 2fa_exempt
 - 2fa_required
+- sender_verification_eligible
+- sender_verification_exempt
 
 ### Read-Only
 

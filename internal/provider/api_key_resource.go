@@ -37,23 +37,6 @@ type apiKeyResourceModel struct {
 	APIKey types.String `tfsdk:"api_key"`
 }
 
-var defaultScopes = []string{
-	"sender_verification_exempt",
-	"sender_verification_eligible",
-	"2fa_required",
-}
-
-func excludeDefaultScopes(scopes []string) []string {
-	// Exclude default scopes from the provided scopes
-	filteredScopes := make([]string, 0, len(scopes))
-	for _, s := range scopes {
-		if !slices.Contains(defaultScopes, s) {
-			filteredScopes = append(filteredScopes, s)
-		}
-	}
-	return filteredScopes
-}
-
 func (r *apiKeyResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_api_key"
 }
@@ -82,7 +65,7 @@ For more detailed information, please see the [SendGrid documentation](https://d
 
 The following Scopes are set automatically by SendGrid, so they cannot be set manually:
 
-- ` + strings.Join(defaultScopes, "\n- ") + `
+- ` + strings.Join(autoScopes, "\n- ") + `
 `,
 				Optional: true,
 			},
@@ -124,13 +107,13 @@ func (r *apiKeyResource) Create(ctx context.Context, req resource.CreateRequest,
 	scopes := flex.ExpandFrameworkStringSet(ctx, plan.Scopes)
 
 	for _, s := range scopes {
-		if slices.Contains(defaultScopes, s) {
+		if slices.Contains(autoScopes, s) {
 			// If scopes automatically added by SendGrid is specified, the process should fail.
 			resp.Diagnostics.AddError(
 				"Creating API Key",
 				fmt.Sprintf(
 					"Unable to create API Key, got error: scopes automatically by SendGrid and cannot be manually assigned: %s",
-					strings.Join(defaultScopes, ", "),
+					strings.Join(autoScopes, ", "),
 				),
 			)
 			return
@@ -149,7 +132,7 @@ func (r *apiKeyResource) Create(ctx context.Context, req resource.CreateRequest,
 		return
 	}
 
-	scopesSet, d := types.SetValueFrom(ctx, types.StringType, excludeDefaultScopes(o.Scopes))
+	scopesSet, d := types.SetValueFrom(ctx, types.StringType, excludeAutoScopes(o.Scopes))
 	resp.Diagnostics.Append(d...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -190,7 +173,7 @@ func (r *apiKeyResource) Read(ctx context.Context, req resource.ReadRequest, res
 		return
 	}
 
-	scopes, d := types.SetValueFrom(ctx, types.StringType, excludeDefaultScopes(o.Scopes))
+	scopes, d := types.SetValueFrom(ctx, types.StringType, excludeAutoScopes(o.Scopes))
 	resp.Diagnostics.Append(d...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -217,13 +200,13 @@ func (r *apiKeyResource) Update(ctx context.Context, req resource.UpdateRequest,
 
 	dataScopes := flex.ExpandFrameworkStringSet(ctx, data.Scopes)
 	for _, s := range dataScopes {
-		if slices.Contains(defaultScopes, s) {
+		if slices.Contains(autoScopes, s) {
 			// If scopes automatically added by SendGrid is specified, the process should fail.
 			resp.Diagnostics.AddError(
 				"Updateting API Key",
 				fmt.Sprintf(
 					"Unable to update API Key, got error: scopes automatically by SendGrid and cannot be manually assigned: %s",
-					strings.Join(defaultScopes, ", "),
+					strings.Join(autoScopes, ", "),
 				),
 			)
 			return
@@ -235,7 +218,7 @@ func (r *apiKeyResource) Update(ctx context.Context, req resource.UpdateRequest,
 		scopes = flex.ExpandFrameworkStringSet(ctx, data.Scopes)
 	}
 
-	scopes = excludeDefaultScopes(scopes)
+	scopes = excludeAutoScopes(scopes)
 
 	data.ID = types.StringValue(id)
 	data.APIKey = state.APIKey
@@ -314,7 +297,7 @@ func (r *apiKeyResource) ImportState(ctx context.Context, req resource.ImportSta
 		return
 	}
 
-	scopes, d := types.SetValueFrom(ctx, types.StringType, excludeDefaultScopes(o.Scopes))
+	scopes, d := types.SetValueFrom(ctx, types.StringType, excludeAutoScopes(o.Scopes))
 	resp.Diagnostics.Append(d...)
 	if resp.Diagnostics.HasError() {
 		return
