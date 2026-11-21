@@ -280,6 +280,88 @@ func TestAPIKeyResource_OnlyAutoScopesIsAnError(t *testing.T) {
 	}
 }
 
+func TestAPIKeyResource_NoScopesIsAnErrorWithoutRequest(t *testing.T) {
+	cases := map[string]struct {
+		config  string
+		wantErr *regexp.Regexp
+	}{
+		"empty scopes": {
+			config:  testAPIKeyConfig(),
+			wantErr: regexp.MustCompile(`full access API key`),
+		},
+		"omitted scopes": {
+			config: `
+resource "sendgrid_api_key" "test" {
+  name = "key"
+}
+`,
+			wantErr: regexp.MustCompile(`"scopes" is required`),
+		},
+		"empty scopes known only at apply": {
+			config: `
+resource "terraform_data" "scopes" {
+  input = []
+}
+
+resource "sendgrid_api_key" "test" {
+  name   = "key"
+  scopes = terraform_data.scopes.output
+}
+`,
+			wantErr: regexp.MustCompile(`full access API key`),
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			api := newFakeAPIKeyAPI()
+
+			resource.UnitTest(t, resource.TestCase{
+				ProtoV6ProviderFactories: fakeAPIKeyProviderFactories(t, api),
+				Steps: []resource.TestStep{
+					{
+						Config:      tc.config,
+						ExpectError: tc.wantErr,
+					},
+				},
+			})
+
+			if got := api.sentScopes(); len(got) != 0 {
+				t.Errorf("sent scopes = %v, want no request", got)
+			}
+		})
+	}
+}
+
+func TestAPIKeyResource_UpdateToEmptyScopesIsAnErrorAndKeepsScopes(t *testing.T) {
+	resourceName := "sendgrid_api_key.test"
+	api := newFakeAPIKeyAPI()
+
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: fakeAPIKeyProviderFactories(t, api),
+		Steps: []resource.TestStep{
+			{
+				Config: testAPIKeyConfig("mail.send"),
+				Check:  expectScopes(resourceName, []string{"mail.send"}),
+			},
+			{
+				Config:      testAPIKeyConfig(),
+				ExpectError: regexp.MustCompile(`full access API key`),
+			},
+			{
+				Config: testAPIKeyConfig("mail.send"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
+				},
+			},
+		},
+	})
+
+	if got := api.sentScopes(); len(got) != 1 || !slices.Equal(got[0], []string{"mail.send"}) {
+		t.Errorf("sent scopes = %v, want only the create with [mail.send]", got)
+	}
+}
+
 func TestAPIKeyDataSource_ExcludesAutoScopes(t *testing.T) {
 	dataSourceName := "data.sendgrid_api_key.test"
 
