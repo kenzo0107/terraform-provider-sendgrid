@@ -56,3 +56,50 @@ func TestExcludeAutoScopes(t *testing.T) {
 		})
 	}
 }
+
+func TestWithDeclaredAutoScopes(t *testing.T) {
+	t.Parallel()
+
+	tests := map[string]struct {
+		scopes   []string
+		declared []string
+		want     []string
+	}{
+		"granted and declared auto scope is kept": {
+			scopes:   []string{"mail.send", "2fa_exempt"},
+			declared: []string{"mail.send", "2fa_exempt"},
+			want:     []string{"mail.send", "2fa_exempt"},
+		},
+		"declared auto scope is kept even if SendGrid granted its counterpart": {
+			scopes:   []string{"mail.send", "2fa_required"},
+			declared: []string{"mail.send", "2fa_exempt"},
+			want:     []string{"mail.send", "2fa_exempt"},
+		},
+		"undeclared auto scopes are dropped": {
+			scopes:   []string{"mail.send", "2fa_required"},
+			declared: []string{"mail.send"},
+			want:     []string{"mail.send"},
+		},
+		"undeclared user scopes are kept to surface drift": {
+			scopes:   []string{"mail.send", "stats.read"},
+			declared: []string{"mail.send"},
+			want:     []string{"mail.send", "stats.read"},
+		},
+		"nil declared behaves like excludeAutoScopes": {
+			scopes:   []string{"mail.send", "2fa_exempt"},
+			declared: nil,
+			want:     []string{"mail.send"},
+		},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			got := withDeclaredAutoScopes(tt.scopes, tt.declared)
+			if !slices.Equal(got, tt.want) {
+				t.Errorf("withDeclaredAutoScopes(%v, %v) = %v, want %v", tt.scopes, tt.declared, got, tt.want)
+			}
+		})
+	}
+}
