@@ -10,6 +10,8 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -68,9 +70,9 @@ The following Scopes are set automatically by SendGrid. They are not sent to Sen
 
 - ` + strings.Join(autoScopes, "\n- ") + `
 
-Listed auto scopes are kept in the state as written, regardless of which of them SendGrid actually grants, so the state does not reflect the key's 2FA or sender verification status. ` + "`scopes`" + ` must include at least one scope other than these.
+Listed auto scopes are kept in the state as written, regardless of which of them SendGrid actually grants, so the state does not reflect the key's 2FA or sender verification status. ` + "`scopes`" + ` must include at least one scope other than these, because SendGrid creates a full access API key when no scopes are sent.
 `,
-				Optional: true,
+				Required: true,
 			},
 			"api_key": schema.StringAttribute{
 				MarkdownDescription: "API Key. NOTE: If imported, you cannot set the value of the API key. This is because the API key is issued only during the creation process.",
@@ -108,10 +110,15 @@ func (r *apiKeyResource) Create(ctx context.Context, req resource.CreateRequest,
 	}
 
 	scopes := flex.ExpandFrameworkStringSet(ctx, plan.Scopes)
+	sent := excludeAutoScopes(scopes)
+	if len(sent) == 0 {
+		addNoScopesToSendError(&resp.Diagnostics)
+		return
+	}
 
 	o, err := r.client.CreateAPIKey(ctx, &sendgrid.InputCreateAPIKey{
 		Name:   plan.Name.ValueString(),
-		Scopes: excludeAutoScopes(scopes),
+		Scopes: sent,
 	})
 	if err != nil {
 		resp.Diagnostics.AddError(
@@ -190,10 +197,12 @@ func (r *apiKeyResource) Update(ctx context.Context, req resource.UpdateRequest,
 
 	var scopes []string
 	if !reflect.DeepEqual(data.Scopes, state.Scopes) {
-		scopes = flex.ExpandFrameworkStringSet(ctx, data.Scopes)
+		scopes = excludeAutoScopes(flex.ExpandFrameworkStringSet(ctx, data.Scopes))
+		if len(scopes) == 0 {
+			addNoScopesToSendError(&resp.Diagnostics)
+			return
+		}
 	}
-
-	scopes = excludeAutoScopes(scopes)
 
 	data.ID = types.StringValue(id)
 	data.APIKey = state.APIKey
@@ -237,17 +246,13 @@ func (r *apiKeyResource) Update(ctx context.Context, req resource.UpdateRequest,
 func (r *apiKeyResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
 	var data apiKeyResourceModel
 	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
-	if resp.Diagnostics.HasError() || data.Scopes.IsUnknown() {
+	if resp.Diagnostics.HasError() || data.Scopes.IsNull() || data.Scopes.IsUnknown() || slices.ContainsFunc(data.Scopes.Elements(), attr.Value.IsUnknown) {
 		return
 	}
 
 	scopes := flex.ExpandFrameworkStringSet(ctx, data.Scopes)
-	if len(scopes) > 0 && len(excludeAutoScopes(scopes)) == 0 {
-		resp.Diagnostics.AddAttributeError(
-			path.Root("scopes"),
-			"Only scopes set automatically by SendGrid",
-			"scopes must include at least one scope other than "+strings.Join(autoScopes, ", ")+". Sending no scopes would create a full access API key.",
-		)
+	if len(excludeAutoScopes(scopes)) == 0 {
+		addNoScopesToSendError(&resp.Diagnostics)
 		return
 	}
 
@@ -260,6 +265,14 @@ func (r *apiKeyResource) ValidateConfig(ctx context.Context, req resource.Valida
 			)
 		}
 	}
+}
+
+func addNoScopesToSendError(diags *diag.Diagnostics) {
+	diags.AddAttributeError(
+		path.Root("scopes"),
+		"No scopes to send to SendGrid",
+		"scopes must include at least one scope other than "+strings.Join(autoScopes, ", ")+". Sending no scopes would create a full access API key.",
+	)
 }
 
 func (r *apiKeyResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
