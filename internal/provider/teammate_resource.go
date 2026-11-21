@@ -22,13 +22,6 @@ import (
 var _ resource.Resource = &teammateResource{}
 var _ resource.ResourceWithImportState = &teammateResource{}
 
-var autoScopes = []string{
-	"2fa_exempt",
-	"2fa_required",
-	"sender_verification_exempt",
-	"sender_verification_eligible",
-}
-
 // Scopes that cannot be assigned when inviting a teammate but can be added after invitation acceptance.
 var scopesBlockedDuringInvitation = []string{
 	"user.profile.update",
