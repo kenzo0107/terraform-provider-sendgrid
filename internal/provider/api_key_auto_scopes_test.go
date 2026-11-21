@@ -18,6 +18,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/plancheck"
+	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/kenzo0107/sendgrid"
 )
 
@@ -131,118 +132,133 @@ func (f *fakeAPIKeyAPI) sentScopes() [][]string {
 	return slices.Clone(f.sent)
 }
 
-func TestAPIKeyResource_AutoScopesGrantedBySendGridCauseNoDiff(t *testing.T) {
-	api := newFakeAPIKeyAPI()
-	resourceName := "sendgrid_api_key.test"
-	config := testAPIKeyConfig("mail.send")
-
-	resource.UnitTest(t, resource.TestCase{
-		ProtoV6ProviderFactories: fakeAPIKeyProviderFactories(t, api),
-		Steps: []resource.TestStep{
-			{
-				Config: config,
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr(resourceName, "scopes.#", "1"),
-					resource.TestCheckTypeSetElemAttr(resourceName, "scopes.*", "mail.send"),
-				),
-			},
-			{
-				Config: config,
-				ConfigPlanChecks: resource.ConfigPlanChecks{
-					PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
-				},
-			},
-		},
-	})
+var accountTypes = map[string][]string{
+	"2fa_required account": twoFactorRequiredAccount,
+	"2fa_exempt account":   twoFactorExemptAccount,
 }
 
-func TestAPIKeyResource_DeclaredAutoScopeNotGrantedBySendGridCausesNoDiff(t *testing.T) {
-	api := newFakeAPIKeyAPI()
-	resourceName := "sendgrid_api_key.test"
-	created := testAPIKeyConfig("mail.send", "2fa_exempt")
-	updated := testAPIKeyConfig("mail.send", "stats.read", "2fa_exempt")
-
-	resource.UnitTest(t, resource.TestCase{
-		ProtoV6ProviderFactories: fakeAPIKeyProviderFactories(t, api),
-		Steps: []resource.TestStep{
-			{
-				Config: created,
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr(resourceName, "scopes.#", "2"),
-					resource.TestCheckTypeSetElemAttr(resourceName, "scopes.*", "2fa_exempt"),
-				),
-			},
-			{
-				Config: created,
-				ConfigPlanChecks: resource.ConfigPlanChecks{
-					PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
-				},
-			},
-			{
-				Config: updated,
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr(resourceName, "scopes.#", "3"),
-					resource.TestCheckTypeSetElemAttr(resourceName, "scopes.*", "stats.read"),
-				),
-			},
-			{
-				Config: updated,
-				ConfigPlanChecks: resource.ConfigPlanChecks{
-					PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
-				},
-			},
-		},
-	})
-
-	for _, scopes := range api.sentScopes() {
-		for _, s := range scopes {
-			if slices.Contains(autoScopes, s) {
-				t.Errorf("sent scopes %v include auto scope %q", scopes, s)
-			}
-		}
+func existingAPIKey(granted []string) *sendgrid.OutputGetAPIKey {
+	return &sendgrid.OutputGetAPIKey{
+		ApiKeyId: "existing",
+		Name:     "key",
+		Scopes:   append([]string{"mail.send"}, granted...),
 	}
-	if got := len(api.sentScopes()); got != 2 {
-		t.Errorf("scope requests = %d, want 2 (create and update)", got)
+}
+
+func expectScopes(resourceName string, scopes []string) resource.TestCheckFunc {
+	checks := []resource.TestCheckFunc{
+		resource.TestCheckResourceAttr(resourceName, "scopes.#", fmt.Sprint(len(scopes))),
+	}
+	for _, s := range scopes {
+		checks = append(checks, resource.TestCheckTypeSetElemAttr(resourceName, "scopes.*", s))
+	}
+	return resource.ComposeAggregateTestCheckFunc(checks...)
+}
+
+func TestAPIKeyResource_AutoScopeLifecycleOnEachAccountType(t *testing.T) {
+	resourceName := "sendgrid_api_key.test"
+
+	sequences := map[string][][]string{
+		"without 2fa_exempt":            {{"mail.send"}, {"mail.send", "stats.read"}},
+		"with 2fa_exempt":               {{"mail.send", "2fa_exempt"}, {"mail.send", "stats.read", "2fa_exempt"}},
+		"2fa_exempt added then removed": {{"mail.send"}, {"mail.send", "2fa_exempt"}, {"mail.send"}},
+	}
+
+	for accountName, granted := range accountTypes {
+		for sequenceName, sequence := range sequences {
+			t.Run(accountName+"/"+sequenceName, func(t *testing.T) {
+				api := newFakeAPIKeyAPI()
+				api.granted = granted
+
+				var steps []resource.TestStep
+				var wantSent [][]string
+				for i, scopes := range sequence {
+					action := plancheck.ResourceActionUpdate
+					if i == 0 {
+						action = plancheck.ResourceActionCreate
+					}
+					config := testAPIKeyConfig(scopes...)
+					steps = append(steps,
+						resource.TestStep{
+							Config: config,
+							ConfigPlanChecks: resource.ConfigPlanChecks{
+								PreApply: []plancheck.PlanCheck{plancheck.ExpectResourceAction(resourceName, action)},
+							},
+							Check: expectScopes(resourceName, scopes),
+						},
+						resource.TestStep{
+							Config: config,
+							ConfigPlanChecks: resource.ConfigPlanChecks{
+								PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
+							},
+						},
+					)
+					wantSent = append(wantSent, excludeAutoScopes(scopes))
+				}
+
+				resource.UnitTest(t, resource.TestCase{
+					ProtoV6ProviderFactories: fakeAPIKeyProviderFactories(t, api),
+					Steps:                    steps,
+				})
+
+				got := api.sentScopes()
+				if !slices.EqualFunc(got, wantSent, slices.Equal[[]string]) {
+					t.Errorf("sent scopes = %v, want %v (one request per create and update, without auto scopes)", got, wantSent)
+				}
+			})
+		}
 	}
 }
 
 func TestAPIKeyResource_ImportThenDeclaredAutoScopeIsAddedByOneUpdate(t *testing.T) {
-	api := newFakeAPIKeyAPI(&sendgrid.OutputGetAPIKey{
-		ApiKeyId: "existing",
-		Name:     "key",
-		Scopes:   []string{"mail.send", "2fa_required", "sender_verification_eligible"},
-	})
 	resourceName := "sendgrid_api_key.test"
 	config := testAPIKeyConfig("mail.send", "2fa_exempt")
 
-	resource.UnitTest(t, resource.TestCase{
-		ProtoV6ProviderFactories: fakeAPIKeyProviderFactories(t, api),
-		Steps: []resource.TestStep{
-			{
-				Config:             config,
-				ResourceName:       resourceName,
-				ImportState:        true,
-				ImportStateId:      "existing",
-				ImportStatePersist: true,
-			},
-			{
-				Config: config,
-				ConfigPlanChecks: resource.ConfigPlanChecks{
-					PreApply: []plancheck.PlanCheck{plancheck.ExpectResourceAction(resourceName, plancheck.ResourceActionUpdate)},
-				},
-				Check: resource.TestCheckTypeSetElemAttr(resourceName, "scopes.*", "2fa_exempt"),
-			},
-			{
-				Config: config,
-				ConfigPlanChecks: resource.ConfigPlanChecks{
-					PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
-				},
-			},
-		},
-	})
+	for accountName, granted := range accountTypes {
+		t.Run(accountName, func(t *testing.T) {
+			api := newFakeAPIKeyAPI(existingAPIKey(granted))
+			api.granted = granted
 
-	if got := api.sentScopes(); len(got) != 1 || !slices.Equal(got[0], []string{"mail.send"}) {
-		t.Errorf("sent scopes = %v, want one update with [mail.send]", got)
+			resource.UnitTest(t, resource.TestCase{
+				ProtoV6ProviderFactories: fakeAPIKeyProviderFactories(t, api),
+				Steps: []resource.TestStep{
+					{
+						Config:             config,
+						ResourceName:       resourceName,
+						ImportState:        true,
+						ImportStateId:      "existing",
+						ImportStatePersist: true,
+						ImportStateCheck: func(states []*terraform.InstanceState) error {
+							if len(states) != 1 {
+								return fmt.Errorf("imported %d states, want 1", len(states))
+							}
+							attrs := states[0].Attributes
+							if attrs["scopes.#"] != "1" || attrs["scopes.0"] != "mail.send" {
+								return fmt.Errorf("imported scopes = %v, want [mail.send]", attrs)
+							}
+							return nil
+						},
+					},
+					{
+						Config: config,
+						ConfigPlanChecks: resource.ConfigPlanChecks{
+							PreApply: []plancheck.PlanCheck{plancheck.ExpectResourceAction(resourceName, plancheck.ResourceActionUpdate)},
+						},
+						Check: expectScopes(resourceName, []string{"mail.send", "2fa_exempt"}),
+					},
+					{
+						Config: config,
+						ConfigPlanChecks: resource.ConfigPlanChecks{
+							PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
+						},
+					},
+				},
+			})
+
+			if got := api.sentScopes(); len(got) != 1 || !slices.Equal(got[0], []string{"mail.send"}) {
+				t.Errorf("sent scopes = %v, want one update with [mail.send]", got)
+			}
+		})
 	}
 }
 
@@ -265,77 +281,25 @@ func TestAPIKeyResource_OnlyAutoScopesIsAnError(t *testing.T) {
 }
 
 func TestAPIKeyDataSource_ExcludesAutoScopes(t *testing.T) {
-	api := newFakeAPIKeyAPI(&sendgrid.OutputGetAPIKey{
-		ApiKeyId: "existing",
-		Name:     "key",
-		Scopes:   []string{"mail.send", "2fa_required", "sender_verification_eligible"},
-	})
 	dataSourceName := "data.sendgrid_api_key.test"
 
-	resource.UnitTest(t, resource.TestCase{
-		ProtoV6ProviderFactories: fakeAPIKeyProviderFactories(t, api),
-		Steps: []resource.TestStep{
-			{
-				Config: `
+	for accountName, granted := range accountTypes {
+		t.Run(accountName, func(t *testing.T) {
+			api := newFakeAPIKeyAPI(existingAPIKey(granted))
+
+			resource.UnitTest(t, resource.TestCase{
+				ProtoV6ProviderFactories: fakeAPIKeyProviderFactories(t, api),
+				Steps: []resource.TestStep{
+					{
+						Config: `
 data "sendgrid_api_key" "test" {
   id = "existing"
 }
 `,
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr(dataSourceName, "scopes.#", "1"),
-					resource.TestCheckTypeSetElemAttr(dataSourceName, "scopes.*", "mail.send"),
-				),
-			},
-		},
-	})
-}
-
-func TestAPIKeyResource_AutoScopeLifecycleOnEachAccountType(t *testing.T) {
-	without := testAPIKeyConfig("mail.send")
-	withExempt := testAPIKeyConfig("mail.send", "2fa_exempt")
-
-	accounts := map[string][]string{
-		"2fa_required account": twoFactorRequiredAccount,
-		"2fa_exempt account":   twoFactorExemptAccount,
-	}
-	sequences := map[string][]string{
-		"without 2fa_exempt":            {without, testAPIKeyConfig("mail.send", "stats.read")},
-		"with 2fa_exempt":               {withExempt, testAPIKeyConfig("mail.send", "stats.read", "2fa_exempt")},
-		"2fa_exempt added then removed": {without, withExempt, without},
-	}
-
-	for accountName, granted := range accounts {
-		for sequenceName, configs := range sequences {
-			t.Run(accountName+"/"+sequenceName, func(t *testing.T) {
-				api := newFakeAPIKeyAPI()
-				api.granted = granted
-
-				var steps []resource.TestStep
-				for _, config := range configs {
-					steps = append(steps,
-						resource.TestStep{Config: config},
-						resource.TestStep{
-							Config: config,
-							ConfigPlanChecks: resource.ConfigPlanChecks{
-								PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
-							},
-						},
-					)
-				}
-
-				resource.UnitTest(t, resource.TestCase{
-					ProtoV6ProviderFactories: fakeAPIKeyProviderFactories(t, api),
-					Steps:                    steps,
-				})
-
-				for _, scopes := range api.sentScopes() {
-					for _, s := range scopes {
-						if slices.Contains(autoScopes, s) {
-							t.Errorf("sent scopes %v include auto scope %q", scopes, s)
-						}
-					}
-				}
+						Check: expectScopes(dataSourceName, []string{"mail.send"}),
+					},
+				},
 			})
-		}
+		})
 	}
 }
