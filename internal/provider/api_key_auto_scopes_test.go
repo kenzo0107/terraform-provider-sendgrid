@@ -23,17 +23,21 @@ import (
 
 const fakeAPIKeyPath = "/api_keys"
 
-var fakeGrantedAutoScopes = []string{"2fa_required", "sender_verification_eligible"}
+var (
+	twoFactorRequiredAccount = []string{"2fa_required", "sender_verification_eligible", "sender_verification_exempt"}
+	twoFactorExemptAccount   = []string{"2fa_exempt", "sender_verification_eligible", "sender_verification_exempt"}
+)
 
 type fakeAPIKeyAPI struct {
-	mu   sync.Mutex
-	keys map[string]*sendgrid.OutputGetAPIKey
-	ids  int
-	sent [][]string
+	mu      sync.Mutex
+	granted []string
+	keys    map[string]*sendgrid.OutputGetAPIKey
+	ids     int
+	sent    [][]string
 }
 
 func newFakeAPIKeyAPI(keys ...*sendgrid.OutputGetAPIKey) *fakeAPIKeyAPI {
-	f := &fakeAPIKeyAPI{keys: map[string]*sendgrid.OutputGetAPIKey{}}
+	f := &fakeAPIKeyAPI{keys: map[string]*sendgrid.OutputGetAPIKey{}, granted: twoFactorRequiredAccount}
 	for _, k := range keys {
 		f.keys[k.ApiKeyId] = k
 	}
@@ -43,7 +47,7 @@ func newFakeAPIKeyAPI(keys ...*sendgrid.OutputGetAPIKey) *fakeAPIKeyAPI {
 func (f *fakeAPIKeyAPI) grant(scopes []string) []string {
 	f.sent = append(f.sent, scopes)
 	granted := slices.Clone(scopes)
-	for _, s := range fakeGrantedAutoScopes {
+	for _, s := range f.granted {
 		if !slices.Contains(granted, s) {
 			granted = append(granted, s)
 		}
@@ -284,4 +288,54 @@ data "sendgrid_api_key" "test" {
 			},
 		},
 	})
+}
+
+func TestAPIKeyResource_AutoScopeLifecycleOnEachAccountType(t *testing.T) {
+	without := testAPIKeyConfig("mail.send")
+	withExempt := testAPIKeyConfig("mail.send", "2fa_exempt")
+
+	accounts := map[string][]string{
+		"2fa_required account": twoFactorRequiredAccount,
+		"2fa_exempt account":   twoFactorExemptAccount,
+	}
+	sequences := map[string][]string{
+		"without 2fa_exempt":            {without, testAPIKeyConfig("mail.send", "stats.read")},
+		"with 2fa_exempt":               {withExempt, testAPIKeyConfig("mail.send", "stats.read", "2fa_exempt")},
+		"2fa_exempt added then removed": {without, withExempt, without},
+	}
+
+	for accountName, granted := range accounts {
+		for sequenceName, configs := range sequences {
+			t.Run(accountName+"/"+sequenceName, func(t *testing.T) {
+				api := newFakeAPIKeyAPI()
+				api.granted = granted
+
+				var steps []resource.TestStep
+				for _, config := range configs {
+					steps = append(steps,
+						resource.TestStep{Config: config},
+						resource.TestStep{
+							Config: config,
+							ConfigPlanChecks: resource.ConfigPlanChecks{
+								PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
+							},
+						},
+					)
+				}
+
+				resource.UnitTest(t, resource.TestCase{
+					ProtoV6ProviderFactories: fakeAPIKeyProviderFactories(t, api),
+					Steps:                    steps,
+				})
+
+				for _, scopes := range api.sentScopes() {
+					for _, s := range scopes {
+						if slices.Contains(autoScopes, s) {
+							t.Errorf("sent scopes %v include auto scope %q", scopes, s)
+						}
+					}
+				}
+			})
+		}
+	}
 }
