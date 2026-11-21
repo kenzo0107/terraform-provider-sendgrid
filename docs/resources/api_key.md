@@ -38,12 +38,14 @@ resource "sendgrid_api_key" "example" {
 
 - `scopes` (Set of String) The permissions API Key has access to.
 
-The following Scopes are set automatically by SendGrid, so they cannot be set manually:
+The following Scopes are set automatically by SendGrid. They are not sent to SendGrid and Terraform shows a warning if they are listed here:
 
 - 2fa_exempt
 - 2fa_required
 - sender_verification_eligible
 - sender_verification_exempt
+
+Listed auto scopes are kept in the state as written, regardless of which of them SendGrid actually grants, so the state does not reflect the key's 2FA or sender verification status. `scopes` must include at least one scope other than these.
 
 ### Read-Only
 

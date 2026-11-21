@@ -8,6 +8,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/kenzo0107/sendgrid"
+	"github.com/kenzo0107/terraform-provider-sendgrid/flex"
 )
 
 // Ensure the implementation satisfies the expected interfaces.
@@ -71,7 +72,7 @@ For more detailed information, please see the [SendGrid documentation](https://d
 				Computed:            true,
 			},
 			"scopes": schema.SetAttribute{
-				MarkdownDescription: "The permissions API Key has access to",
+				MarkdownDescription: "The permissions API Key has access to. Scopes set automatically by SendGrid (" + flex.QuoteAndJoin(autoScopes) + ") are excluded.",
 				ElementType:         types.StringType,
 				Computed:            true,
 			},
@@ -107,7 +108,7 @@ func (d *apiKeyDataSource) Read(ctx context.Context, req datasource.ReadRequest,
 		return
 	}
 
-	scopes, diags := types.SetValueFrom(ctx, types.StringType, o.Scopes)
+	scopes, diags := types.SetValueFrom(ctx, types.StringType, excludeAutoScopes(o.Scopes))
 	resp.Diagnostics.Append(diags...)
 
 	u := apiKeyDataSourceModel{
