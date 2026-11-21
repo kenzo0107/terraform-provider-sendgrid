@@ -67,6 +67,8 @@ For more detailed information, please see the [SendGrid documentation](https://d
 The following Scopes are set automatically by SendGrid. They are not sent to SendGrid and Terraform shows a warning if they are listed here:
 
 - ` + strings.Join(autoScopes, "\n- ") + `
+
+Listed auto scopes are kept in the state as written, regardless of which of them SendGrid actually grants, so the state does not reflect the key's 2FA or sender verification status. ` + "`scopes`" + ` must include at least one scope other than these.
 `,
 				Optional: true,
 			},

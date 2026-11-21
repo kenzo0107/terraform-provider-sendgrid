@@ -45,6 +45,8 @@ The following Scopes are set automatically by SendGrid. They are not sent to Sen
 - sender_verification_eligible
 - sender_verification_exempt
 
+Listed auto scopes are kept in the state as written, regardless of which of them SendGrid actually grants, so the state does not reflect the key's 2FA or sender verification status. `scopes` must include at least one scope other than these.
+
 ### Read-Only
 
 - `api_key` (String, Sensitive) API Key. NOTE: If imported, you cannot set the value of the API key. This is because the API key is issued only during the creation process.
