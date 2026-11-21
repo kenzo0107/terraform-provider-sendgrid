@@ -42,4 +42,4 @@ output "scopes" {
 ### Read-Only
 
 - `name` (String) API key's email
-- `scopes` (Set of String) The permissions API Key has access to
+- `scopes` (Set of String) The permissions API Key has access to. Scopes set automatically by SendGrid (`2fa_exempt`, `2fa_required`, `sender_verification_eligible`, `sender_verification_exempt`) are excluded.
