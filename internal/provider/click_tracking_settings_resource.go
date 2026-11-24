@@ -44,7 +44,7 @@ Click tracking helps you understand how users are engaging with your communicati
 		`,
 		Attributes: map[string]schema.Attribute{
 			"enabled": schema.BoolAttribute{
-				MarkdownDescription: "Indicates if click tracking is enabled or disabled.",
+				MarkdownDescription: "Indicates if click tracking is enabled or disabled. Defaults to `false`, so omitting it turns click tracking off for the account.",
 				Optional:            true,
 				Computed:            true,
 				Default:             booldefault.StaticBool(false),

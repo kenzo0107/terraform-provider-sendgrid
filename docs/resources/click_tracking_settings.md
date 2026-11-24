@@ -25,7 +25,7 @@ resource "sendgrid_click_tracking_settings" "example" {
 
 ### Optional
 
-- `enabled` (Boolean) Indicates if click tracking is enabled or disabled.
+- `enabled` (Boolean) Indicates if click tracking is enabled or disabled. Defaults to `false`, so omitting it turns click tracking off for the account.
 
 ### Read-Only
 

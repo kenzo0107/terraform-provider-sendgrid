@@ -26,7 +26,7 @@ resource "sendgrid_open_tracking_settings" "example" {
 
 ### Optional
 
-- `enabled` (Boolean) Indicates if open tracking is enabled or disabled.
+- `enabled` (Boolean) Indicates if open tracking is enabled or disabled. Defaults to `false`, so omitting it turns open tracking off for the account.
 
 ## Import
 

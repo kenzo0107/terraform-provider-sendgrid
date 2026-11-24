@@ -20,7 +20,7 @@ import (
 func testAccTrackingSettingsClient(t *testing.T) *sendgrid.Client {
 	t.Helper()
 
-	var opts []sendgrid.Option
+	opts := []sendgrid.Option{sendgrid.OptionHTTPClient(newHTTPClient())}
 	if subuser := os.Getenv("SENDGRID_SUBUSER"); subuser != "" {
 		opts = append(opts, sendgrid.OptionSubuser(subuser))
 	}
