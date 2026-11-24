@@ -6,6 +6,7 @@ package provider
 import (
 	"context"
 	"fmt"
+	"net/netip"
 	"regexp"
 	"slices"
 	"sort"
@@ -466,47 +467,47 @@ func allowedRuleIDs(rules []*sendgrid.AllowedIP) map[int64]bool {
 	return ids
 }
 
-// canonicalAllowListIP makes a single address and its /32 form compare equal.
+// canonicalAllowListIP returns the masked CIDR that SendGrid stores for an address, wildcard or CIDR.
 func canonicalAllowListIP(ip string) string {
-	return strings.TrimSuffix(strings.TrimSpace(ip), "/32")
+	ip = strings.TrimSpace(ip)
+	cidr := ip
+	if !strings.Contains(cidr, "/") {
+		octets := strings.Split(cidr, ".")
+		bits := 32
+		for i := len(octets) - 1; i >= 0 && octets[i] == "*"; i-- {
+			octets[i] = "0"
+			bits -= 8
+		}
+		cidr = fmt.Sprintf("%s/%d", strings.Join(octets, "."), bits)
+	}
+
+	prefix, err := netip.ParsePrefix(cidr)
+	if err != nil {
+		return ip
+	}
+	return prefix.Masked().String()
 }
 
-// findAllowedIP prefers an exact match and falls back to the canonical form.
+// findAllowedIP returns the rule that covers the same range as ip, however either is written.
 func findAllowedIP(rules []*sendgrid.AllowedIP, ip string) *sendgrid.AllowedIP {
+	want := canonicalAllowListIP(ip)
 	for _, rule := range rules {
-		if rule != nil && rule.IP == ip {
-			return rule
-		}
-	}
-	for _, rule := range rules {
-		if rule != nil && canonicalAllowListIP(rule.IP) == canonicalAllowListIP(ip) {
+		if rule != nil && canonicalAllowListIP(rule.IP) == want {
 			return rule
 		}
 	}
 	return nil
 }
 
-// matchAddedIPs pairs requested addresses with created rules, by position when the API reformats them.
+// matchAddedIPs pairs each requested address with the created rule for the same range, never by position.
 func matchAddedIPs(requested []string, created []*sendgrid.AllowedIP) (map[string]int64, error) {
 	ruleIDs := map[string]int64{}
-	rest := slices.DeleteFunc(slices.Clone(created), func(rule *sendgrid.AllowedIP) bool { return rule == nil })
-
-	var unmatched []string
 	for _, ip := range requested {
-		rule := findAllowedIP(rest, ip)
+		rule := findAllowedIP(created, ip)
 		if rule == nil {
-			unmatched = append(unmatched, ip)
-			continue
+			return nil, fmt.Errorf("the API returned no rule for %q", ip)
 		}
 		ruleIDs[ip] = rule.ID
-		rest = slices.DeleteFunc(rest, func(other *sendgrid.AllowedIP) bool { return other == rule })
-	}
-
-	if len(unmatched) != len(rest) {
-		return nil, fmt.Errorf("requested %d IPs %v but the API returned %d rules", len(requested), requested, len(created))
-	}
-	for i, ip := range unmatched {
-		ruleIDs[ip] = rest[i].ID
 	}
 	return ruleIDs, nil
 }

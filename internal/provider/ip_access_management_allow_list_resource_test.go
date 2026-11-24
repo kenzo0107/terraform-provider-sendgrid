@@ -354,6 +354,52 @@ func TestIPAccessManagementAllowListResource_ImportRejectsUnknownIP(t *testing.T
 	expectStrings(t, "writes", api.writes(), nil)
 }
 
+func TestIPAccessManagementAllowListResource_AdoptsAndImportsEquivalentRanges(t *testing.T) {
+	api := newFakeAllowListAPI("10.0.0.0/8", "198.51.100.0/24", "192.0.2.10/32")
+	resourceName := "sendgrid_ip_access_management_allow_list.test"
+	config := allowListConfig(true, "10.*.*.*", "198.51.100.14/24", "192.0.2.10")
+
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: fakeAllowListProviderFactories(t, api),
+		Steps: []resource.TestStep{
+			{
+				Config: config,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "rule_ids.10.*.*.*", "1"),
+					resource.TestCheckResourceAttr(resourceName, "rule_ids.198.51.100.14/24", "2"),
+					resource.TestCheckResourceAttr(resourceName, "rule_ids.192.0.2.10", "3"),
+				),
+			},
+			{
+				ResourceName:      resourceName,
+				ImportState:       true,
+				ImportStateId:     "10.*.*.*,198.51.100.14/24,192.0.2.10",
+				ImportStateVerify: true,
+			},
+		},
+	})
+
+	expectStrings(t, "writes before destroy", api.writes()[:len(api.writes())-1], []string{})
+	expectStrings(t, "allow list after destroy", api.ips(), []string{})
+}
+
+func TestCanonicalAllowListIP(t *testing.T) {
+	for ip, want := range map[string]string{
+		"192.0.2.10":        "192.0.2.10/32",
+		" 192.0.2.10/32 ":   "192.0.2.10/32",
+		"10.*.*.*":          "10.0.0.0/8",
+		"192.168.*.*":       "192.168.0.0/16",
+		"203.0.113.*":       "203.0.113.0/24",
+		"192.168.100.14/24": "192.168.100.0/24",
+		"198.51.100.0/24":   "198.51.100.0/24",
+		"10.*.5.*":          "10.*.5.*",
+	} {
+		if got := canonicalAllowListIP(ip); got != want {
+			t.Errorf("canonicalAllowListIP(%q) = %q, want %q", ip, got, want)
+		}
+	}
+}
+
 func TestMatchAddedIPs(t *testing.T) {
 	rules := func(ips ...string) []*sendgrid.AllowedIP {
 		out := []*sendgrid.AllowedIP{}
@@ -363,13 +409,22 @@ func TestMatchAddedIPs(t *testing.T) {
 		return out
 	}
 
-	got, err := matchAddedIPs([]string{"10.*.*.*", "192.0.2.1/32", "192.0.2.2"}, rules("192.0.2.2", "10.0.0.0/8", "192.0.2.1"))
-	want := map[string]int64{"192.0.2.2": 1, "10.*.*.*": 2, "192.0.2.1/32": 3}
+	requested := []string{"10.*.*.*", "192.168.*.*", "192.0.2.1", "198.51.100.14/24"}
+	got, err := matchAddedIPs(requested, rules("198.51.100.0/24", "192.0.2.1/32", "192.168.0.0/16", "10.0.0.0/8"))
+	want := map[string]int64{"198.51.100.14/24": 1, "192.0.2.1": 2, "192.168.*.*": 3, "10.*.*.*": 4}
 	if err != nil || !reflect.DeepEqual(got, want) {
-		t.Errorf("matchAddedIPs = %v, %v, want %v", got, err, want)
+		t.Errorf("matchAddedIPs with a reordered response = %v, %v, want %v", got, err, want)
 	}
 
-	if _, err := matchAddedIPs([]string{"192.0.2.1", "192.0.2.2"}, rules("192.0.2.1")); err == nil {
+	got, err = matchAddedIPs([]string{"192.0.2.1", "192.0.2.1/32"}, rules("192.0.2.1/32"))
+	if want := map[string]int64{"192.0.2.1": 1, "192.0.2.1/32": 1}; err != nil || !reflect.DeepEqual(got, want) {
+		t.Errorf("matchAddedIPs with two spellings of one rule = %v, %v, want %v", got, err, want)
+	}
+
+	if _, err := matchAddedIPs([]string{"192.0.2.1", "192.0.2.2"}, rules("192.0.2.1/32")); err == nil {
 		t.Error("matchAddedIPs with a missing rule: want an error")
+	}
+	if _, err := matchAddedIPs([]string{"10.*.*.*", "192.168.*.*"}, rules("10.0.0.0/8", "172.16.0.0/12")); err == nil {
+		t.Error("matchAddedIPs with a rule for another range: want an error, not a positional match")
 	}
 }
