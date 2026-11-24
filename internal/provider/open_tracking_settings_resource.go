@@ -43,7 +43,7 @@ SendGrid stores one open tracking setting per account, so declaring more than on
 		`,
 		Attributes: map[string]schema.Attribute{
 			"enabled": schema.BoolAttribute{
-				MarkdownDescription: "Indicates if open tracking is enabled or disabled.",
+				MarkdownDescription: "Indicates if open tracking is enabled or disabled. Defaults to `false`, so omitting it turns open tracking off for the account.",
 				Optional:            true,
 				Computed:            true,
 				Default:             booldefault.StaticBool(false),
