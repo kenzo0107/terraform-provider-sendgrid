@@ -5,6 +5,7 @@ subcategory: ""
 description: |-
   Subscription tracking adds an unsubscribe link to the end of your emails, so recipients can unsubscribe from all of your emails. See Subscription Tracking https://www.twilio.com/docs/sendgrid/ui/account-and-settings/tracking#subscription-tracking.
   SendGrid stores one subscription tracking setting per account, so declaring more than one of this resource for the same account will make them fight over that single setting. Destroying this resource leaves the setting on the account as it is.
+  When you enable subscription tracking, also set html_content and plain_content. They default to "", so leaving them out stores empty unsubscribe content on the account.
 ---
 
 # sendgrid_subscription_tracking_settings (Resource)
@@ -12,6 +13,8 @@ description: |-
 Subscription tracking adds an unsubscribe link to the end of your emails, so recipients can unsubscribe from all of your emails. See [Subscription Tracking](https://www.twilio.com/docs/sendgrid/ui/account-and-settings/tracking#subscription-tracking).
 
 SendGrid stores one subscription tracking setting per account, so declaring more than one of this resource for the same account will make them fight over that single setting. Destroying this resource leaves the setting on the account as it is.
+
+When you enable subscription tracking, also set `html_content` and `plain_content`. They default to `""`, so leaving them out stores empty unsubscribe content on the account.
 
 ## Example Usage
 
@@ -30,11 +33,11 @@ resource "sendgrid_subscription_tracking_settings" "example" {
 ### Optional
 
 - `enabled` (Boolean) Indicates if subscription tracking is enabled or disabled. Defaults to `false`, so omitting it turns subscription tracking off for the account.
-- `html_content` (String) The HTML of the unsubscribe link added to HTML emails. Put the link text inside `<% %>`, for example `<% Unsubscribe %>`. Defaults to `""`, so omitting it clears the value on the account.
-- `landing` (String) The HTML of the page that SendGrid shows after a recipient unsubscribes. Used when `url` is empty. Defaults to `""`, so omitting it clears the value on the account.
-- `plain_content` (String) The text of the unsubscribe link added to plain text emails. Include `<% %>`, which is replaced with the unsubscribe URL. Defaults to `""`, so omitting it clears the value on the account.
-- `replace` (String) A tag in your email content to replace with the unsubscribe link, so you can place it anywhere instead of at the end of the email. Defaults to `""`, so omitting it clears the value on the account.
-- `url` (String) The URL of your own unsubscribe page. When it is set, recipients are sent there instead of the `landing` page. Defaults to `""`, so omitting it clears the value on the account.
+- `html_content` (String) The HTML of the unsubscribe content added to HTML emails. Defaults to `""`, so omitting it clears the value on the account.
+- `landing` (String) The HTML of the page that SendGrid shows after a recipient clicks the unsubscribe link. Defaults to `""`, so omitting it clears the value on the account.
+- `plain_content` (String) The text of the unsubscribe content added to plain text emails. Include the `<% %>` tag; without it, recipients get no unsubscribe URL. Defaults to `""`, so omitting it clears the value on the account.
+- `replace` (String) A tag in your email content that SendGrid replaces with the unsubscribe content, so you can place it anywhere in the email. Defaults to `""`, so omitting it clears the value on the account.
+- `url` (String) The URL of your own unsubscribe page, where recipients are sent to unsubscribe. Defaults to `""`, so omitting it clears the value on the account.
 
 ## Import
 

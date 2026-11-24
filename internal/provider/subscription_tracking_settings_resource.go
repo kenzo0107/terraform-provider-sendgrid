@@ -48,11 +48,11 @@ func newSubscriptionTrackingSettingsResourceModel(o *sendgrid.OutputGetSubscript
 
 var subscriptionTrackingSettingsDescriptions = map[string]string{
 	"enabled":       "Indicates if subscription tracking is enabled or disabled.",
-	"html_content":  "The HTML of the unsubscribe link added to HTML emails. Put the link text inside `<% %>`, for example `<% Unsubscribe %>`.",
-	"plain_content": "The text of the unsubscribe link added to plain text emails. Include `<% %>`, which is replaced with the unsubscribe URL.",
-	"landing":       "The HTML of the page that SendGrid shows after a recipient unsubscribes. Used when `url` is empty.",
-	"replace":       "A tag in your email content to replace with the unsubscribe link, so you can place it anywhere instead of at the end of the email.",
-	"url":           "The URL of your own unsubscribe page. When it is set, recipients are sent there instead of the `landing` page.",
+	"html_content":  "The HTML of the unsubscribe content added to HTML emails.",
+	"plain_content": "The text of the unsubscribe content added to plain text emails. Include the `<% %>` tag; without it, recipients get no unsubscribe URL.",
+	"landing":       "The HTML of the page that SendGrid shows after a recipient clicks the unsubscribe link.",
+	"replace":       "A tag in your email content that SendGrid replaces with the unsubscribe content, so you can place it anywhere in the email.",
+	"url":           "The URL of your own unsubscribe page, where recipients are sent to unsubscribe.",
 }
 
 func (r *subscriptionTrackingSettingsResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -74,6 +74,8 @@ func (r *subscriptionTrackingSettingsResource) Schema(ctx context.Context, req r
 Subscription tracking adds an unsubscribe link to the end of your emails, so recipients can unsubscribe from all of your emails. See [Subscription Tracking](https://www.twilio.com/docs/sendgrid/ui/account-and-settings/tracking#subscription-tracking).
 
 SendGrid stores one subscription tracking setting per account, so declaring more than one of this resource for the same account will make them fight over that single setting. Destroying this resource leaves the setting on the account as it is.
+
+When you enable subscription tracking, also set ` + "`html_content` and `plain_content`" + `. They default to ` + "`\"\"`" + `, so leaving them out stores empty unsubscribe content on the account.
 		`,
 		Attributes: map[string]schema.Attribute{
 			"enabled": schema.BoolAttribute{

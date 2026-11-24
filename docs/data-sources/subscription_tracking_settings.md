@@ -29,8 +29,8 @@ output "enabled" {
 ### Read-Only
 
 - `enabled` (Boolean) Indicates if subscription tracking is enabled or disabled.
-- `html_content` (String) The HTML of the unsubscribe link added to HTML emails. Put the link text inside `<% %>`, for example `<% Unsubscribe %>`.
-- `landing` (String) The HTML of the page that SendGrid shows after a recipient unsubscribes. Used when `url` is empty.
-- `plain_content` (String) The text of the unsubscribe link added to plain text emails. Include `<% %>`, which is replaced with the unsubscribe URL.
-- `replace` (String) A tag in your email content to replace with the unsubscribe link, so you can place it anywhere instead of at the end of the email.
-- `url` (String) The URL of your own unsubscribe page. When it is set, recipients are sent there instead of the `landing` page.
+- `html_content` (String) The HTML of the unsubscribe content added to HTML emails.
+- `landing` (String) The HTML of the page that SendGrid shows after a recipient clicks the unsubscribe link.
+- `plain_content` (String) The text of the unsubscribe content added to plain text emails. Include the `<% %>` tag; without it, recipients get no unsubscribe URL.
+- `replace` (String) A tag in your email content that SendGrid replaces with the unsubscribe content, so you can place it anywhere in the email.
+- `url` (String) The URL of your own unsubscribe page, where recipients are sent to unsubscribe.
