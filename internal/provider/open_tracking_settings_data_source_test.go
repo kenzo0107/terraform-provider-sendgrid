@@ -13,14 +13,17 @@ func TestAccOpenTrackingSettingsDataSource(t *testing.T) {
 	resourceName := "data.sendgrid_open_tracking_settings.test"
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheck(t) },
+		PreCheck: func() {
+			testAccPreCheck(t)
+			testAccRestoreOpenTrackingSettings(t)
+		},
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			// Read testing
 			{
 				Config: testAccOpenTrackingSettingsDataSourceConfig(),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr(resourceName, "enabled", "false"),
+					resource.TestCheckResourceAttr(resourceName, "enabled", "true"),
 				),
 			},
 		},
@@ -29,7 +32,12 @@ func TestAccOpenTrackingSettingsDataSource(t *testing.T) {
 
 func testAccOpenTrackingSettingsDataSourceConfig() string {
 	return `
+resource "sendgrid_open_tracking_settings" "test" {
+  enabled = true
+}
+
 data "sendgrid_open_tracking_settings" "test" {
+  depends_on = [sendgrid_open_tracking_settings.test]
 }
 `
 }
