@@ -2,6 +2,8 @@
 
 FEATURES:
 
+* **New Resource:** `sendgrid_subscription_tracking_settings` - Manage the account-wide subscription tracking setting
+* **New Data Source:** `sendgrid_subscription_tracking_settings` - Retrieve the current subscription tracking setting
 * **New Resource:** `sendgrid_open_tracking_settings` - Manage the account-wide open tracking setting
 * **New Data Source:** `sendgrid_open_tracking_settings` - Retrieve the current open tracking setting
 * **New Resource:** `sendgrid_bounce_settings` - Manage bounce settings for your SendGrid account, including soft bounce purge configuration
