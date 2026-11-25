@@ -3,7 +3,12 @@
 page_title: "sendgrid_ip_access_management_allow_list Resource - terraform-provider-sendgrid"
 subcategory: ""
 description: |-
-  Manages IP addresses in the IP Access Management allow list. A missing address can lock you out of your SendGrid account.
+  Manages IP addresses in the IP Access Management https://www.twilio.com/docs/sendgrid/ui/account-and-settings/ip-access-management allow list.
+  ~> This resource can lock you out of your SendGrid account. As soon as the allow list holds one IP address, SendGrid restricts access to the UI, the API and the SMTP relay to the allowed addresses. An address missing from the list can therefore:
+  stop production mail delivery from your application servers (API and SMTP),block the machine or CI runner that runs Terraform from any further plan or apply,lock every user out of the SendGrid UI.
+  The SendGrid documentation describes no way to turn the restriction off through the API once you are locked out. Recovery requires contacting SendGrid support with thorough proof of your identity. Before applying, make sure ips covers every address that needs access, including the address Terraform itself runs from.
+  Behavior:
+  All new addresses are sent in a single request, so the list never holds only part of the configured addresses.On update, new addresses are added before removed addresses are deleted.The resource manages only the addresses it added or imported. Addresses added in the UI or by another resource are left untouched. Listing one of them in ips fails instead of taking it over. To manage such an address, import the resource with every address it should manage.Removing an address from ips or destroying the resource removes it from the allow list. Removing the last address does not deny all access: SendGrid accepts the request and leaves the allow list empty, as it was before the first address was added.
 ---
 
 # sendgrid_ip_access_management_allow_list (Resource)
