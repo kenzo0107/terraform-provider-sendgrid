@@ -237,7 +237,10 @@ func TestIPAccessManagementAllowListResource_RequiresAcknowledgement(t *testing.
 func TestIPAccessManagementAllowListResource_RejectsInvalidIPs(t *testing.T) {
 	api := newFakeAllowListAPI()
 
-	for _, ips := range [][]string{{}, {"example.com"}, {"192.0.2.256"}, {"192.0.2.1/33"}, {"2001:db8::1"}} {
+	for _, ips := range [][]string{
+		{}, {"example.com"}, {"192.0.2.256"}, {"192.0.2.1/33"}, {"2001:db8::1"}, {"192.0.2"},
+		{"10.*.5.*"}, {"*.1.2.3"}, {"10.*.*.*/8"}, {"192.168.100.14/24"}, {" 192.0.2.1"},
+	} {
 		resource.UnitTest(t, resource.TestCase{
 			ProtoV6ProviderFactories: fakeAllowListProviderFactories(t, api),
 			Steps: []resource.TestStep{
@@ -283,8 +286,33 @@ func TestIPAccessManagementAllowListResource_NormalizedIPsHaveNoDiff(t *testing.
 	expectStrings(t, "allow list after destroy", api.ips(), []string{})
 }
 
-func TestIPAccessManagementAllowListResource_AdoptsExistingAndRestoresRemoved(t *testing.T) {
-	api := newFakeAllowListAPI("192.0.2.10")
+func TestIPAccessManagementAllowListResource_RejectsAddressAlreadyOnAllowList(t *testing.T) {
+	api := newFakeAllowListAPI("10.0.0.0/8")
+	existing := regexp.MustCompile(`"10\.\*\.\*\.\*" is already on the allow list as "10\.0\.0\.0/8"`)
+
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: fakeAllowListProviderFactories(t, api),
+		Steps: []resource.TestStep{
+			{
+				Config:      allowListConfig(true, "10.*.*.*", "192.0.2.20"),
+				ExpectError: existing,
+			},
+			{
+				Config: allowListConfig(true, "192.0.2.20"),
+			},
+			{
+				Config:      allowListConfig(true, "10.*.*.*", "192.0.2.20", "192.0.2.30"),
+				ExpectError: existing,
+			},
+		},
+	})
+
+	expectStrings(t, "writes", api.writes(), []string{"POST 192.0.2.20", "DELETE [2]"})
+	expectStrings(t, "allow list after destroy", api.ips(), []string{"10.0.0.0/8"})
+}
+
+func TestIPAccessManagementAllowListResource_RestoresRemovedAndKeepsRespelledRule(t *testing.T) {
+	api := newFakeAllowListAPI()
 	resourceName := "sendgrid_ip_access_management_allow_list.test"
 	config := allowListConfig(true, "192.0.2.10", "192.0.2.20")
 
@@ -293,14 +321,6 @@ func TestIPAccessManagementAllowListResource_AdoptsExistingAndRestoresRemoved(t 
 		Steps: []resource.TestStep{
 			{
 				Config: config,
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr(resourceName, "rule_ids.192.0.2.10", "1"),
-					resource.TestCheckResourceAttr(resourceName, "rule_ids.192.0.2.20", "2"),
-					func(*terraform.State) error {
-						expectStrings(t, "writes after create", api.writes(), []string{"POST 192.0.2.20"})
-						return nil
-					},
-				),
 			},
 			{
 				PreConfig: func() {
@@ -322,9 +342,10 @@ func TestIPAccessManagementAllowListResource_AdoptsExistingAndRestoresRemoved(t 
 			{
 				Config: allowListConfig(true, "192.0.2.10/32", "192.0.2.20"),
 				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "rule_ids.%", "2"),
 					resource.TestCheckResourceAttr(resourceName, "rule_ids.192.0.2.10/32", "1"),
 					func(*terraform.State) error {
-						expectStrings(t, "allow list after rewriting an IP as /32", api.ips(), []string{"192.0.2.10/32", "192.0.2.20/32"})
+						expectStrings(t, "writes after rewriting an IP as /32", api.writes(), []string{"POST 192.0.2.10,192.0.2.20", "POST 192.0.2.20"})
 						return nil
 					},
 				),
@@ -354,33 +375,37 @@ func TestIPAccessManagementAllowListResource_ImportRejectsUnknownIP(t *testing.T
 	expectStrings(t, "writes", api.writes(), nil)
 }
 
-func TestIPAccessManagementAllowListResource_AdoptsAndImportsEquivalentRanges(t *testing.T) {
-	api := newFakeAllowListAPI("10.0.0.0/8", "198.51.100.0/24", "192.0.2.10/32")
+func TestIPAccessManagementAllowListResource_ImportsEquivalentRanges(t *testing.T) {
+	api := newFakeAllowListAPI("10.0.0.0/8", "198.51.100.0/24", "192.0.2.10/32", "203.0.113.1")
 	resourceName := "sendgrid_ip_access_management_allow_list.test"
-	config := allowListConfig(true, "10.*.*.*", "198.51.100.14/24", "192.0.2.10")
+	config := allowListConfig(true, "10.*.*.*", "198.51.100.0/24", "192.0.2.10")
 
 	resource.UnitTest(t, resource.TestCase{
 		ProtoV6ProviderFactories: fakeAllowListProviderFactories(t, api),
 		Steps: []resource.TestStep{
 			{
-				Config: config,
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr(resourceName, "rule_ids.10.*.*.*", "1"),
-					resource.TestCheckResourceAttr(resourceName, "rule_ids.198.51.100.14/24", "2"),
-					resource.TestCheckResourceAttr(resourceName, "rule_ids.192.0.2.10", "3"),
-				),
+				Config:             config,
+				ResourceName:       resourceName,
+				ImportState:        true,
+				ImportStateId:      "10.*.*.*,198.51.100.0/24,192.0.2.10",
+				ImportStatePersist: true,
 			},
 			{
-				ResourceName:      resourceName,
-				ImportState:       true,
-				ImportStateId:     "10.*.*.*,198.51.100.14/24,192.0.2.10",
-				ImportStateVerify: true,
+				Config: config,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "rule_ids.10.*.*.*", "1"),
+					resource.TestCheckResourceAttr(resourceName, "rule_ids.198.51.100.0/24", "2"),
+					resource.TestCheckResourceAttr(resourceName, "rule_ids.192.0.2.10", "3"),
+				),
 			},
 		},
 	})
 
-	expectStrings(t, "writes before destroy", api.writes()[:len(api.writes())-1], []string{})
-	expectStrings(t, "allow list after destroy", api.ips(), []string{})
+	expectStrings(t, "writes", api.writes(), []string{"DELETE [1 2 3]"})
+	expectStrings(t, "allow list after destroy", api.ips(), []string{"203.0.113.1/32"})
 }
 
 func TestCanonicalAllowListIP(t *testing.T) {
@@ -390,9 +415,9 @@ func TestCanonicalAllowListIP(t *testing.T) {
 		"10.*.*.*":          "10.0.0.0/8",
 		"192.168.*.*":       "192.168.0.0/16",
 		"203.0.113.*":       "203.0.113.0/24",
-		"192.168.100.14/24": "192.168.100.0/24",
-		"198.51.100.0/24":   "198.51.100.0/24",
+		"192.168.100.14/24": "192.168.100.14/24",
 		"10.*.5.*":          "10.*.5.*",
+		"198.51.100.0/24":   "198.51.100.0/24",
 	} {
 		if got := canonicalAllowListIP(ip); got != want {
 			t.Errorf("canonicalAllowListIP(%q) = %q, want %q", ip, got, want)
@@ -409,9 +434,9 @@ func TestMatchAddedIPs(t *testing.T) {
 		return out
 	}
 
-	requested := []string{"10.*.*.*", "192.168.*.*", "192.0.2.1", "198.51.100.14/24"}
+	requested := []string{"10.*.*.*", "192.168.*.*", "192.0.2.1", "198.51.100.0/24"}
 	got, err := matchAddedIPs(requested, rules("198.51.100.0/24", "192.0.2.1/32", "192.168.0.0/16", "10.0.0.0/8"))
-	want := map[string]int64{"198.51.100.14/24": 1, "192.0.2.1": 2, "192.168.*.*": 3, "10.*.*.*": 4}
+	want := map[string]int64{"198.51.100.0/24": 1, "192.0.2.1": 2, "192.168.*.*": 3, "10.*.*.*": 4}
 	if err != nil || !reflect.DeepEqual(got, want) {
 		t.Errorf("matchAddedIPs with a reordered response = %v, %v, want %v", got, err, want)
 	}

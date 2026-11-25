@@ -7,14 +7,12 @@ import (
 	"context"
 	"fmt"
 	"net/netip"
-	"regexp"
 	"slices"
 	"sort"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/boolvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
-	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -32,11 +30,26 @@ var _ resource.ResourceWithModifyPlan = &ipAccessManagementAllowListResource{}
 
 const ipAccessManagementAllowListID = "ip_access_management_allow_list"
 
-// allowListEntryRegexp matches IPv4 with optional wildcard octets or a CIDR prefix length.
-var allowListEntryRegexp = func() *regexp.Regexp {
-	octet := `(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d|\*)`
-	return regexp.MustCompile(`^` + octet + `(\.` + octet + `){3}(/(3[0-2]|[12]?\d))?$`)
-}()
+type allowListEntryValidator struct{}
+
+func (allowListEntryValidator) Description(context.Context) string {
+	return "must be an IPv4 address, an IPv4 CIDR block without host bits, or an IPv4 address whose trailing octets are wildcards"
+}
+
+func (v allowListEntryValidator) MarkdownDescription(ctx context.Context) string {
+	return v.Description(ctx)
+}
+
+func (v allowListEntryValidator) ValidateString(ctx context.Context, req validator.StringRequest, resp *validator.StringResponse) {
+	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
+		return
+	}
+
+	ip := req.ConfigValue.ValueString()
+	if _, ok := parseAllowListIP(ip); !ok {
+		resp.Diagnostics.AddAttributeError(req.Path, "Invalid allow list entry", fmt.Sprintf("%q %s.", ip, v.Description(ctx)))
+	}
+}
 
 func newIPAccessManagementAllowListResource() resource.Resource {
 	return &ipAccessManagementAllowListResource{}
@@ -74,8 +87,8 @@ Behavior:
 
 - All new addresses are sent in a single request, so the list never holds only part of the configured addresses.
 - On update, new addresses are added before removed addresses are deleted.
-- The resource manages only the addresses listed in ` + "`ips`" + `. Addresses added in the UI or by another resource are left untouched. An address in ` + "`ips`" + ` that is already on the allow list is adopted with a warning instead of being added twice.
-- Removing an address from ` + "`ips`" + ` or destroying the resource removes it from the allow list, adopted addresses included. Removing the last address does not deny all access: SendGrid accepts the request and leaves the allow list empty, as it was before the first address was added.
+- The resource manages only the addresses it added or imported. Addresses added in the UI or by another resource are left untouched. Listing one of them in ` + "`ips`" + ` fails instead of taking it over. To manage such an address, import the resource with every address it should manage.
+- Removing an address from ` + "`ips`" + ` or destroying the resource removes it from the allow list. Removing the last address does not deny all access: SendGrid accepts the request and leaves the allow list empty, as it was before the first address was added.
 		`,
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
@@ -86,14 +99,12 @@ Behavior:
 				},
 			},
 			"ips": schema.SetAttribute{
-				MarkdownDescription: "The IPv4 addresses to allow. An entry can be a single address (`192.0.2.10`), a wildcard (`192.*.*.*`) or CIDR notation (`192.0.2.10/32`). SendGrid stores every entry as CIDR (`192.0.2.10` as `192.0.2.10/32`, `203.0.*.*` as `203.0.0.0/16`); the value written here is kept in state, so this causes no diff.",
+				MarkdownDescription: "The IPv4 addresses to allow. An entry can be a single address (`192.0.2.10`), an address whose trailing octets are wildcards (`192.*.*.*`) or CIDR notation (`192.0.2.10/32`). A wildcard cannot be followed by a non-wildcard octet or combined with a prefix length, and a CIDR block cannot have host bits set (`192.0.2.0/24`, not `192.0.2.14/24`). SendGrid rejects those forms. SendGrid stores every entry as CIDR (`192.0.2.10` as `192.0.2.10/32`, `203.0.*.*` as `203.0.0.0/16`); the value written here is kept in state, so this causes no diff.",
 				ElementType:         types.StringType,
 				Required:            true,
 				Validators: []validator.Set{
 					setvalidator.SizeAtLeast(1),
-					setvalidator.ValueStringsAre(
-						stringvalidator.RegexMatches(allowListEntryRegexp, "must be an IPv4 address, optionally with wildcard octets or a CIDR prefix length"),
-					),
+					setvalidator.ValueStringsAre(allowListEntryValidator{}),
 				},
 			},
 			"acknowledge_lockout_risk": schema.BoolAttribute{
@@ -243,7 +254,7 @@ func (r *ipAccessManagementAllowListResource) Update(ctx context.Context, req re
 	var toAdd []string
 	kept := map[string]int64{}
 	for _, ip := range planned {
-		if id, ok := current[ip]; ok {
+		if id, ok := managedRuleID(current, ip); ok {
 			kept[ip] = id
 		} else {
 			toAdd = append(toAdd, ip)
@@ -258,6 +269,9 @@ func (r *ipAccessManagementAllowListResource) Update(ctx context.Context, req re
 
 	union := map[string]int64{}
 	for ip, id := range current {
+		union[ip] = id
+	}
+	for ip, id := range kept {
 		union[ip] = id
 	}
 	for ip, id := range added {
@@ -367,24 +381,20 @@ func (r *ipAccessManagementAllowListResource) ImportState(ctx context.Context, r
 	resp.Diagnostics.Append(resp.State.Set(ctx, allowListModel(ctx, ruleIDs, &resp.Diagnostics))...)
 }
 
-// addIPs adopts addresses already on the allow list and adds the rest in one request.
-func (r *ipAccessManagementAllowListResource) addIPs(ctx context.Context, ips []string, existing []*sendgrid.AllowedIP) (map[string]int64, diag.Diagnostics) {
+// addIPs adds the addresses in one request and refuses addresses that are already on the allow list.
+func (r *ipAccessManagementAllowListResource) addIPs(ctx context.Context, toAdd []string, existing []*sendgrid.AllowedIP) (map[string]int64, diag.Diagnostics) {
 	var diags diag.Diagnostics
 	ruleIDs := map[string]int64{}
 
-	var toAdd []string
-	for _, ip := range ips {
+	for _, ip := range toAdd {
 		if rule := findAllowedIP(existing, ip); rule != nil {
-			ruleIDs[ip] = rule.ID
-			diags.AddWarning(
+			diags.AddError(
 				"IP already on the allow list",
-				fmt.Sprintf("%q is already on the allow list (rule ID %d). This resource now manages it and removes it when it leaves \"ips\" or the resource is destroyed.", ip, rule.ID),
+				fmt.Sprintf("%q is already on the allow list as %q (rule ID %d) and was not added by this resource. Taking it over would remove it when it leaves \"ips\" or the resource is destroyed. To manage it, import the resource with every address it should manage.", ip, rule.IP, rule.ID),
 			)
-			continue
 		}
-		toAdd = append(toAdd, ip)
 	}
-	if len(toAdd) == 0 {
+	if diags.HasError() || len(toAdd) == 0 {
 		return ruleIDs, diags
 	}
 	sort.Strings(toAdd)
@@ -467,9 +477,21 @@ func allowedRuleIDs(rules []*sendgrid.AllowedIP) map[int64]bool {
 	return ids
 }
 
-// canonicalAllowListIP returns the masked CIDR that SendGrid stores for an address, wildcard or CIDR.
-func canonicalAllowListIP(ip string) string {
-	ip = strings.TrimSpace(ip)
+// managedRuleID finds the rule this resource already manages for the same range, however ip is written.
+func managedRuleID(ruleIDs map[string]int64, ip string) (int64, bool) {
+	if id, ok := ruleIDs[ip]; ok {
+		return id, true
+	}
+	for managed, id := range ruleIDs {
+		if canonicalAllowListIP(managed) == canonicalAllowListIP(ip) {
+			return id, true
+		}
+	}
+	return 0, false
+}
+
+// parseAllowListIP returns the CIDR for an address, a CIDR block without host bits or trailing wildcards.
+func parseAllowListIP(ip string) (netip.Prefix, bool) {
 	cidr := ip
 	if !strings.Contains(cidr, "/") {
 		octets := strings.Split(cidr, ".")
@@ -482,10 +504,19 @@ func canonicalAllowListIP(ip string) string {
 	}
 
 	prefix, err := netip.ParsePrefix(cidr)
-	if err != nil {
-		return ip
+	if err != nil || !prefix.Addr().Is4() || prefix != prefix.Masked() {
+		return netip.Prefix{}, false
 	}
-	return prefix.Masked().String()
+	return prefix, true
+}
+
+// canonicalAllowListIP returns the CIDR that SendGrid stores for an address, wildcard or CIDR.
+func canonicalAllowListIP(ip string) string {
+	ip = strings.TrimSpace(ip)
+	if prefix, ok := parseAllowListIP(ip); ok {
+		return prefix.String()
+	}
+	return ip
 }
 
 // findAllowedIP returns the rule that covers the same range as ip, however either is written.

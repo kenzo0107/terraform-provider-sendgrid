@@ -22,8 +22,8 @@ Behavior:
 
 - All new addresses are sent in a single request, so the list never holds only part of the configured addresses.
 - On update, new addresses are added before removed addresses are deleted.
-- The resource manages only the addresses listed in `ips`. Addresses added in the UI or by another resource are left untouched. An address in `ips` that is already on the allow list is adopted with a warning instead of being added twice.
-- Removing an address from `ips` or destroying the resource removes it from the allow list, adopted addresses included. Removing the last address does not deny all access: SendGrid accepts the request and leaves the allow list empty, as it was before the first address was added.
+- The resource manages only the addresses it added or imported. Addresses added in the UI or by another resource are left untouched. Listing one of them in `ips` fails instead of taking it over. To manage such an address, import the resource with every address it should manage.
+- Removing an address from `ips` or destroying the resource removes it from the allow list. Removing the last address does not deny all access: SendGrid accepts the request and leaves the allow list empty, as it was before the first address was added.
 
 ## Example Usage
 
@@ -45,7 +45,7 @@ resource "sendgrid_ip_access_management_allow_list" "example" {
 ### Required
 
 - `acknowledge_lockout_risk` (Boolean) Must be `true`. Confirms that you have read the lockout warning above.
-- `ips` (Set of String) The IPv4 addresses to allow. An entry can be a single address (`192.0.2.10`), a wildcard (`192.*.*.*`) or CIDR notation (`192.0.2.10/32`). SendGrid stores every entry as CIDR (`192.0.2.10` as `192.0.2.10/32`, `203.0.*.*` as `203.0.0.0/16`); the value written here is kept in state, so this causes no diff.
+- `ips` (Set of String) The IPv4 addresses to allow. An entry can be a single address (`192.0.2.10`), an address whose trailing octets are wildcards (`192.*.*.*`) or CIDR notation (`192.0.2.10/32`). A wildcard cannot be followed by a non-wildcard octet or combined with a prefix length, and a CIDR block cannot have host bits set (`192.0.2.0/24`, not `192.0.2.14/24`). SendGrid rejects those forms. SendGrid stores every entry as CIDR (`192.0.2.10` as `192.0.2.10/32`, `203.0.*.*` as `203.0.0.0/16`); the value written here is kept in state, so this causes no diff.
 
 ### Read-Only
 
