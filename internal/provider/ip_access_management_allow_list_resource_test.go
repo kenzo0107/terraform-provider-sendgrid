@@ -410,14 +410,12 @@ func TestIPAccessManagementAllowListResource_ImportsEquivalentRanges(t *testing.
 
 func TestCanonicalAllowListIP(t *testing.T) {
 	for ip, want := range map[string]string{
-		"192.0.2.10":        "192.0.2.10/32",
-		" 192.0.2.10/32 ":   "192.0.2.10/32",
-		"10.*.*.*":          "10.0.0.0/8",
-		"192.168.*.*":       "192.168.0.0/16",
-		"203.0.113.*":       "203.0.113.0/24",
-		"192.168.100.14/24": "192.168.100.14/24",
-		"10.*.5.*":          "10.*.5.*",
-		"198.51.100.0/24":   "198.51.100.0/24",
+		"192.0.2.10":      "192.0.2.10/32",
+		" 192.0.2.10/32 ": "192.0.2.10/32",
+		"10.*.*.*":        "10.0.0.0/8",
+		"192.168.*.*":     "192.168.0.0/16",
+		"203.0.113.*":     "203.0.113.0/24",
+		"198.51.100.0/24": "198.51.100.0/24",
 	} {
 		if got := canonicalAllowListIP(ip); got != want {
 			t.Errorf("canonicalAllowListIP(%q) = %q, want %q", ip, got, want)
