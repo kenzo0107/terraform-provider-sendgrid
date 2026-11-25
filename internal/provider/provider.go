@@ -211,6 +211,7 @@ func (p *sendgridProvider) Resources(ctx context.Context) []func() resource.Reso
 		newBounceSettingsResource,
 		newAlertResource,
 		newDesignResource,
+		newIPAccessManagementAllowListResource,
 		newIPPoolResource,
 		newMarketingSenderResource,
 	}
